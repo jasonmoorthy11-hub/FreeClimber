@@ -13,7 +13,7 @@ from itertools import combinations
 logger = logging.getLogger(__name__)
 
 
-def test_normality(groups: dict, alpha: float = 0.05) -> dict:
+def check_normality(groups: dict, alpha: float = 0.05) -> dict:
     """Shapiro-Wilk normality test per group.
 
     Args:
@@ -91,7 +91,7 @@ def compare_multiple_groups(groups: dict, normal: bool = None, alpha: float = 0.
     arrays = [a[~np.isnan(a)] for a in arrays]
 
     if normal is None:
-        norm_test = test_normality(groups, alpha)
+        norm_test = check_normality(groups, alpha)
         normal = norm_test['all_normal']
 
     # Omnibus test
