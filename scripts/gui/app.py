@@ -27,8 +27,21 @@ from matplotlib.patches import Rectangle
 
 from gui.controller import AnalysisController
 
+import matplotlib.pyplot as plt
+plt.rcParams.update({
+    'figure.facecolor': '#1a1a2e',
+    'axes.facecolor': '#16213e',
+    'axes.edgecolor': '#0f3460',
+    'axes.labelcolor': '#e8e8e8',
+    'text.color': '#e8e8e8',
+    'xtick.color': '#e8e8e8',
+    'ytick.color': '#e8e8e8',
+    'grid.color': '#0f3460',
+    'grid.alpha': 0.5,
+})
+
 ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
+ctk.set_default_color_theme(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'theme.json'))
 
 # Tooltip text for parameters
 TOOLTIPS = {
@@ -74,7 +87,7 @@ class ToolTip:
         tw.wm_overrideredirect(True)
         tw.wm_geometry(f"+{x}+{y}")
         label = tk.Label(tw, text=self.text, justify=tk.LEFT,
-                         background="#333333", foreground="#eeeeee",
+                         background="#16213e", foreground="#e8e8e8",
                          relief=tk.SOLID, borderwidth=1,
                          font=("Helvetica", 11), wraplength=300, padx=6, pady=4)
         label.pack()
@@ -109,7 +122,7 @@ class ParameterSlider(ctk.CTkFrame):
 
         if tooltip:
             info_btn = ctk.CTkLabel(self, text="ⓘ", width=20, cursor="hand2",
-                                     text_color="#888888")
+                                     text_color="#8892b0")
             info_btn.grid(row=0, column=3, padx=(0, 4))
             ToolTip(info_btn, tooltip)
 
@@ -213,9 +226,9 @@ class FreeClimberApp(ctk.CTk):
         btn_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
         btn_frame.pack(fill="x", padx=8)
         ctk.CTkButton(btn_frame, text="Open Video…", width=140, command=self._browse_video).pack(side="left", padx=(0, 4))
-        ctk.CTkButton(btn_frame, text="Reload", width=80, fg_color="#555555", command=self._reload_video).pack(side="left")
+        ctk.CTkButton(btn_frame, text="Reload", width=80, command=self._reload_video).pack(side="left")
 
-        self.video_label = ctk.CTkLabel(sidebar, text="No video selected", text_color="#999999",
+        self.video_label = ctk.CTkLabel(sidebar, text="No video selected", text_color="#8892b0",
                                          font=("Helvetica", 11), wraplength=290, anchor="w")
         self.video_label.pack(anchor="w", padx=8, pady=(2, 4))
 
@@ -249,7 +262,7 @@ class FreeClimberApp(ctk.CTk):
         self.threshold_entry = ctk.CTkEntry(th_frame, width=80, justify="center")
         self.threshold_entry.pack(side="left", padx=4)
         self.threshold_entry.insert(0, "auto")
-        info = ctk.CTkLabel(th_frame, text="ⓘ", width=20, cursor="hand2", text_color="#888888")
+        info = ctk.CTkLabel(th_frame, text="ⓘ", width=20, cursor="hand2", text_color="#8892b0")
         info.pack(side="left")
         ToolTip(info, TOOLTIPS['threshold'])
 
@@ -281,7 +294,7 @@ class FreeClimberApp(ctk.CTk):
         self.frame_rate_entry = ctk.CTkEntry(fr_frame, width=60, justify="center")
         self.frame_rate_entry.pack(side="left", padx=4)
         self.frame_rate_entry.insert(0, "30")
-        ctk.CTkLabel(fr_frame, text="fps", text_color="#999999").pack(side="left")
+        ctk.CTkLabel(fr_frame, text="fps", text_color="#8892b0").pack(side="left")
 
         px_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
         px_frame.pack(fill="x", padx=8, pady=1)
@@ -347,33 +360,34 @@ class FreeClimberApp(ctk.CTk):
                                                values=self.controller.list_profiles() or ["(none)"],
                                                command=self._on_profile_selected)
         self.profile_menu.pack(side="left", padx=(0, 4))
-        ctk.CTkButton(prof_frame, text="Save", width=60, fg_color="#555555",
+        ctk.CTkButton(prof_frame, text="Save", width=60,
                        command=self._save_profile).pack(side="left", padx=(0, 2))
-        ctk.CTkButton(prof_frame, text="Del", width=40, fg_color="#555555",
+        ctk.CTkButton(prof_frame, text="Del", width=40,
                        command=self._delete_profile).pack(side="left")
 
         # --- ACTION BUTTONS ---
-        ctk.CTkFrame(sidebar, height=2, fg_color="#444444").pack(fill="x", padx=8, pady=8)
+        ctk.CTkFrame(sidebar, height=2, fg_color="#0f3460").pack(fill="x", padx=8, pady=8)
         btn_actions = ctk.CTkFrame(sidebar, fg_color="transparent")
         btn_actions.pack(fill="x", padx=8, pady=2)
-        ctk.CTkButton(btn_actions, text="Test Parameters", width=140, fg_color="#555555",
+        ctk.CTkButton(btn_actions, text="Test Parameters", width=140,
                        command=self._test_parameters).pack(side="left", padx=(0, 4))
-        ctk.CTkButton(btn_actions, text="Save Config", width=100, fg_color="#555555",
+        ctk.CTkButton(btn_actions, text="Save Config", width=100,
                        command=self._save_config).pack(side="left")
 
         btn_actions2 = ctk.CTkFrame(sidebar, fg_color="transparent")
         btn_actions2.pack(fill="x", padx=8, pady=2)
-        ctk.CTkButton(btn_actions2, text="Batch Mode", width=140, fg_color="#555555",
+        ctk.CTkButton(btn_actions2, text="Batch Mode", width=140,
                        command=self._batch_mode).pack(side="left", padx=(0, 4))
-        ctk.CTkButton(btn_actions2, text="Copy Methods", width=100, fg_color="#555555",
+        ctk.CTkButton(btn_actions2, text="Copy Methods", width=100,
                        command=self._copy_methods).pack(side="left")
 
         self.run_btn = ctk.CTkButton(sidebar, text="RUN ANALYSIS", height=40,
                                       font=("Helvetica", 15, "bold"),
+                                      fg_color="#e94560", hover_color="#c73550",
                                       command=self._run_analysis)
         self.run_btn.pack(fill="x", padx=8, pady=(8, 4))
 
-        self.progress_label = ctk.CTkLabel(sidebar, text="", text_color="#999999",
+        self.progress_label = ctk.CTkLabel(sidebar, text="", text_color="#8892b0",
                                             font=("Helvetica", 11))
         self.progress_label.pack(anchor="w", padx=8)
         self.progress_bar = ctk.CTkProgressBar(sidebar, width=280)
@@ -400,7 +414,6 @@ class FreeClimberApp(ctk.CTk):
         tab.grid_columnconfigure(0, weight=1)
 
         self.setup_fig = Figure(figsize=(8, 4), dpi=100)
-        self.setup_fig.patch.set_facecolor('#2b2b2b')
         self.setup_canvas = FigureCanvasTkAgg(self.setup_fig, master=tab)
         self.setup_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
 
@@ -420,7 +433,6 @@ class FreeClimberApp(ctk.CTk):
         tab.grid_columnconfigure(0, weight=1)
 
         self.diag_fig = Figure(figsize=(10, 6), dpi=100)
-        self.diag_fig.patch.set_facecolor('#2b2b2b')
         self.diag_canvas = FigureCanvasTkAgg(self.diag_fig, master=tab)
         self.diag_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
 
@@ -469,7 +481,6 @@ class FreeClimberApp(ctk.CTk):
         speed_tab.grid_rowconfigure(0, weight=1)
         speed_tab.grid_columnconfigure(0, weight=1)
         self.speed_fig = Figure(figsize=(6, 3), dpi=100)
-        self.speed_fig.patch.set_facecolor('#2b2b2b')
         self.speed_canvas = FigureCanvasTkAgg(self.speed_fig, master=speed_tab)
         self.speed_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
 
@@ -478,7 +489,6 @@ class FreeClimberApp(ctk.CTk):
         x_tab.grid_rowconfigure(0, weight=1)
         x_tab.grid_columnconfigure(0, weight=1)
         self.x_fig = Figure(figsize=(6, 3), dpi=100)
-        self.x_fig.patch.set_facecolor('#2b2b2b')
         self.x_canvas = FigureCanvasTkAgg(self.x_fig, master=x_tab)
         self.x_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
 
@@ -487,7 +497,6 @@ class FreeClimberApp(ctk.CTk):
         y_tab.grid_rowconfigure(0, weight=1)
         y_tab.grid_columnconfigure(0, weight=1)
         self.y_fig = Figure(figsize=(6, 3), dpi=100)
-        self.y_fig.patch.set_facecolor('#2b2b2b')
         self.y_canvas = FigureCanvasTkAgg(self.y_fig, master=y_tab)
         self.y_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
 
@@ -507,17 +516,17 @@ class FreeClimberApp(ctk.CTk):
         style = tk.ttk.Style()
         style.theme_use("default")
         style.configure("Dark.Treeview",
-                         background="#333333",
-                         foreground="#eeeeee",
-                         fieldbackground="#333333",
-                         rowheight=24,
-                         font=("Helvetica", 11))
+                         background="#16213e",
+                         foreground="#e8e8e8",
+                         fieldbackground="#16213e",
+                         rowheight=28,
+                         font=("Menlo", 11))
         style.configure("Dark.Treeview.Heading",
-                         background="#444444",
-                         foreground="#eeeeee",
-                         font=("Helvetica", 11, "bold"))
+                         background="#0f3460",
+                         foreground="#e8e8e8",
+                         font=("SF Display", 11, "bold"))
         style.map("Dark.Treeview",
-                   background=[("selected", "#1f6aa5")],
+                   background=[("selected", "#e94560")],
                    foreground=[("selected", "#ffffff")])
         return style
 
@@ -722,7 +731,7 @@ class FreeClimberApp(ctk.CTk):
         if self.video_meta.get('first_frame') is not None:
             ax1 = self.setup_fig.add_subplot(121)
             ax1.imshow(self.video_meta['first_frame'])
-            ax1.set_title("Frame 0 (draw ROI)", color='white', fontsize=10)
+            ax1.set_title("Frame 0 (draw ROI)", fontsize=10)
             ax1.axis("off")
 
             # Set ROI to full frame by default
@@ -734,7 +743,7 @@ class FreeClimberApp(ctk.CTk):
         if self.video_meta.get('last_frame') is not None:
             ax2 = self.setup_fig.add_subplot(122)
             ax2.imshow(self.video_meta['last_frame'])
-            ax2.set_title("Final frame (reference)", color='white', fontsize=10)
+            ax2.set_title("Final frame (reference)", fontsize=10)
             ax2.axis("off")
 
         self.setup_fig.tight_layout()
@@ -859,7 +868,6 @@ class FreeClimberApp(ctk.CTk):
         # Speed plot
         self.speed_fig.clear()
         ax = self.speed_fig.add_subplot(111)
-        ax.set_facecolor('#2b2b2b')
 
         ycol = None
         for c in df.columns:
@@ -872,11 +880,10 @@ class FreeClimberApp(ctk.CTk):
         if ycol:
             y = pd.to_numeric(df[ycol], errors="coerce").values
             x = list(range(1, len(df) + 1))
-            ax.bar(x, y, color="#1f6aa5", edgecolor="#3a8fd4", alpha=0.85)
-            ax.set_xlabel("Vial", color='white')
-            ax.set_ylabel(ycol, color='white')
-            ax.set_title("Climbing Speed by Vial", color='white', fontsize=11)
-            ax.tick_params(colors='white')
+            ax.bar(x, y, color="#53a8b6", edgecolor="#3d8a96", alpha=0.85)
+            ax.set_xlabel("Vial")
+            ax.set_ylabel(ycol)
+            ax.set_title("Climbing Speed by Vial", fontsize=11)
             ax.grid(True, alpha=0.15)
 
         self.speed_canvas.draw()
@@ -906,16 +913,14 @@ class FreeClimberApp(ctk.CTk):
         # X plot
         self.x_fig.clear()
         ax = self.x_fig.add_subplot(111)
-        ax.set_facecolor('#2b2b2b')
         if x_col and vial_col:
             grp = pos_df.groupby([frame_col, vial_col])[x_col].mean().reset_index()
             for v in sorted(grp[vial_col].unique()):
                 sub = grp[grp[vial_col] == v]
                 ax.plot(sub[frame_col].values, sub[x_col].values, label=str(v), alpha=0.7)
-            ax.set_title("Mean X Position Over Time", color='white', fontsize=10)
-            ax.set_xlabel("Frame", color='white')
-            ax.set_ylabel("X", color='white')
-            ax.tick_params(colors='white')
+            ax.set_title("Mean X Position Over Time", fontsize=10)
+            ax.set_xlabel("Frame")
+            ax.set_ylabel("X")
             ax.grid(True, alpha=0.15)
             if len(grp[vial_col].unique()) <= 12:
                 ax.legend(fontsize=8)
@@ -924,16 +929,14 @@ class FreeClimberApp(ctk.CTk):
         # Y plot
         self.y_fig.clear()
         ax = self.y_fig.add_subplot(111)
-        ax.set_facecolor('#2b2b2b')
         if y_col and vial_col:
             grp = pos_df.groupby([frame_col, vial_col])[y_col].mean().reset_index()
             for v in sorted(grp[vial_col].unique()):
                 sub = grp[grp[vial_col] == v]
                 ax.plot(sub[frame_col].values, sub[y_col].values, label=str(v), alpha=0.7)
-            ax.set_title("Mean Y Position Over Time", color='white', fontsize=10)
-            ax.set_xlabel("Frame", color='white')
-            ax.set_ylabel("Y", color='white')
-            ax.tick_params(colors='white')
+            ax.set_title("Mean Y Position Over Time", fontsize=10)
+            ax.set_xlabel("Frame")
+            ax.set_ylabel("Y")
             ax.grid(True, alpha=0.15)
             if len(grp[vial_col].unique()) <= 12:
                 ax.legend(fontsize=8)

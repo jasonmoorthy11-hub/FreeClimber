@@ -139,26 +139,26 @@ def generate_html_report(
         labels = slopes_df.iloc[:, 0].astype(str).values if len(slopes_df.columns) > 0 else [str(i) for i in range(len(slopes_df))]
         fig.add_trace(
             go.Bar(x=labels, y=y_vals, name='Speed',
-                   marker_color='#1f6aa5'),
+                   marker_color='#53a8b6'),
             row=1, col=1
         )
 
         # Histogram
         fig.add_trace(
             go.Histogram(x=y_vals, name='Distribution', nbinsx=20,
-                         marker_color='#56B4E9'),
+                         marker_color='#e94560'),
             row=1, col=2
         )
 
     # Data table
     fig.add_trace(
         go.Table(
-            header=dict(values=list(slopes_df.columns), fill_color='#444444',
+            header=dict(values=list(slopes_df.columns), fill_color='#0f3460',
                         font=dict(color='white', size=11)),
             cells=dict(
                 values=[slopes_df[c].round(4) if slopes_df[c].dtype in ['float64', 'float32'] else slopes_df[c]
                         for c in slopes_df.columns],
-                fill_color='#333333',
+                fill_color='#16213e',
                 font=dict(color='white', size=10),
             )
         ),
@@ -179,11 +179,11 @@ def generate_html_report(
 
     fig.add_trace(
         go.Table(
-            header=dict(values=['Metric', 'Value'], fill_color='#444444',
+            header=dict(values=['Metric', 'Value'], fill_color='#0f3460',
                         font=dict(color='white')),
             cells=dict(
                 values=[[r[0] for r in stats_rows[1:]], [r[1] for r in stats_rows[1:]]],
-                fill_color='#333333',
+                fill_color='#16213e',
                 font=dict(color='white'),
             )
         ),
@@ -208,16 +208,16 @@ _PDF_TEMPLATE_STR = """
 <head>
 <style>
     body { font-family: Helvetica, Arial, sans-serif; margin: 40px; color: #333; font-size: 11pt; }
-    h1 { color: #1f6aa5; border-bottom: 2px solid #1f6aa5; padding-bottom: 8px; }
+    h1 { color: #e94560; border-bottom: 2px solid #e94560; padding-bottom: 8px; }
     h2 { color: #444; margin-top: 24px; }
     .table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 10pt; }
-    .table th { background: #1f6aa5; color: white; padding: 6px 10px; text-align: left; }
+    .table th { background: #e94560; color: white; padding: 6px 10px; text-align: left; }
     .table td { border-bottom: 1px solid #ddd; padding: 5px 10px; }
     .table tr:nth-child(even) { background: #f9f9f9; }
     .figure { text-align: center; margin: 16px 0; }
     .figure img { max-width: 100%; }
     .stats { background: #f5f5f5; padding: 12px; border-radius: 4px; font-family: monospace; font-size: 10pt; }
-    .params { background: #f0f5fa; padding: 12px; border-radius: 4px; font-family: monospace; font-size: 9pt; }
+    .params { background: #fef0f2; padding: 12px; border-radius: 4px; font-family: monospace; font-size: 9pt; }
     .footer { margin-top: 30px; color: #888; font-size: 9pt; text-align: center; border-top: 1px solid #ddd; padding-top: 8px; }
 </style>
 </head>
