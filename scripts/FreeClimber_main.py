@@ -218,7 +218,7 @@ class FreeClimber(object):
     
         try:
             os.mkdir(self.path_project + 'log/')
-        except:
+        except FileExistsError:
             pass
         self.path_completed = self.path_project + 'log/completed.log'
         self.path_skipped = self.path_project + 'log/skipped.log'
@@ -468,7 +468,8 @@ def main():
                 fc.process(video_file = File,variables = None, config_file = fc.config_file)
                 fc.timer(t0)
                 fc.log_video(completed=True, file_name = File)
-            except:
+            except Exception as e:
+                print(f'!! Error processing {File}: {e}')
                 fc.log_video(completed=False, file_name = File)    
 
     ## Concatenate slopes of all .slopes.csv files into a single, results.csv file

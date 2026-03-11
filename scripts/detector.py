@@ -12,20 +12,22 @@ publication = False
 import os
 import sys
 import time
-import ffmpeg
+import logging
 
+import cv2
 import numpy as np
 import pandas as pd
 import trackpy as tp
-import subprocess as sp
 from scipy.stats import linregress
-from scipy.signal import find_peaks,peak_prominences
+from scipy.signal import find_peaks, peak_prominences
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.lines import Line2D
 
 from config import parse_variable_list, apply_config, load_config
+
+logger = logging.getLogger(__name__)
 
 ## Issue with 'SettingWithCopyWarning' in step_3
 pd.options.mode.chained_assignment = None  # default='warn'
@@ -242,40 +244,54 @@ class detector(object):
 
     ## Video processing functions
     def video_to_array(self, file, **kwargs):
-        '''Converts video into an nd-array using ffmpeg-python module.
+        '''Converts video into an nd-array using OpenCV.
         ----
         Inputs:
           file (str): Path to video file
-          kwargs: Can be used with the ffmpeg.output() argument.
         ----
         Returns:
-          image_stack (nd-array): nd-array of the video
+          image_stack (nd-array): nd-array of the video (frames, height, width, 3) RGB
         '''
         if self.debug: print('detector.video_to_array')
-        
-        ## Extracting video meta-data
-        try:
-            try:
-                probe = ffmpeg.probe(file)
-            except:
-                print('!! Could not read %s into FreeClimber. Likely due to unacceptable video file or FFmpeg not installed' % file)
-                raise SystemExit
-            video_info = next(x for x in probe['streams'] if x['codec_type'] == 'video')
-            self.width = int(video_info['width'])
-            self.height = int(video_info['height'])
-        except:
-            print('!! Could not read in video file metadata')
-        
-        ## Converting video to nd-array    
-        try:
-            out,err = (ffmpeg
-                       .input(file)
-                       .output('pipe:',format='rawvideo', pix_fmt='rgb24',**kwargs)
-                       .run(capture_stdout=True))
-            self.n_frames = int(len(out)/self.height/self.width/3)
-            image_stack = np.frombuffer(out, np.uint8).reshape([-1, self.height, self.width, 3])
-        except:
-            print('!! Could not read in video file to an array. Error message (if any):', err)
+
+        cap = cv2.VideoCapture(file)
+        if not cap.isOpened():
+            print('!! Could not read video file. The file may be corrupted or in an unsupported format: %s' % file)
+            raise SystemExit
+
+        ## Extract metadata from video
+        self.width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        detected_fps = cap.get(cv2.CAP_PROP_FPS)
+
+        if self.debug:
+            print(f'  Video: {self.width}x{self.height}, {self.n_frames} frames, {detected_fps:.1f} fps')
+
+        ## Warn if detected fps differs from config
+        if detected_fps > 0 and hasattr(self, 'frame_rate'):
+            if abs(detected_fps - self.frame_rate) > 1:
+                print(f'!! Warning: Video fps ({detected_fps:.1f}) differs from config frame_rate ({self.frame_rate})')
+
+        ## Read all frames into array
+        frames = []
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            # OpenCV reads BGR, convert to RGB for consistency
+            frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        cap.release()
+
+        if not frames:
+            print('!! Could not read any frames from video file: %s' % file)
+            raise SystemExit
+
+        self.n_frames = len(frames)
+        image_stack = np.array(frames)
+
+        if self.debug:
+            print(f'  Loaded {self.n_frames} frames, shape: {image_stack.shape}')
 
         return image_stack
 
@@ -326,29 +342,71 @@ class detector(object):
         return clean_stack
     
     ## Subtract background
-    def subtract_background(self,video_array=None):
-        '''Generate a null background image and subtract that from each frame
+    def subtract_background(self, video_array=None, method=None):
+        '''Generate a null background image and subtract that from each frame.
         ----
         Inputs:
           video_array (nd-array): clean_stack generated from crop_and_grayscale
-          first_frame (int): First frame to consider for background subtraction
-          last_frame (int): Last frame to consider for background subtraction
+          method (str): Background subtraction method:
+            - "temporal_median" (default): Median across blank frames (published method)
+            - "mog2": Mixture of Gaussians (cv2.createBackgroundSubtractorMOG2)
+            - "running_average": Fast running average (cv2.accumulateWeighted)
         ----
         Returns:
           spot_stack (nd-array): Background-subtracted image stack
-          background (array): Array containing the pixel intensities for each x,y-coordinate'''
+          background (array): Background model image
+        '''
         if self.debug: print('detector.subtract_background')
-        
-        ## Setting the last frame to the end if None provided
+
+        if method is None:
+            method = getattr(self, 'background_method', 'temporal_median')
+
         first_frame = self.blank_0
         last_frame = self.blank_n
-                    
-        ## Generating a null background image as the median pixel intensity across frames
-        background = np.median(video_array[first_frame:last_frame,:,:].astype(float), axis=0).astype(int)
-        if self.debug: print('detector.subtract_background: dimensions:', background.shape)
-        
-        ## Subtracting the null background image from each individual frame
-        spot_stack = np.subtract(video_array,background)
+
+        if method == 'mog2':
+            return self._subtract_bg_mog2(video_array)
+        elif method == 'running_average':
+            return self._subtract_bg_running_avg(video_array)
+        else:
+            # Default: temporal median (original published method)
+            background = np.median(
+                video_array[first_frame:last_frame, :, :].astype(float), axis=0
+            ).astype(int)
+            if self.debug: print('detector.subtract_background: dimensions:', background.shape)
+            spot_stack = np.subtract(video_array, background)
+            return spot_stack, background
+
+    def _subtract_bg_mog2(self, video_array):
+        '''MOG2 background subtraction — better for glass reflections and variable lighting.'''
+        if self.debug: print('detector._subtract_bg_mog2')
+        mog = cv2.createBackgroundSubtractorMOG2(detectShadows=True)
+
+        # Train on blank frames
+        for i in range(self.blank_0, self.blank_n):
+            frame = video_array[i].astype(np.uint8)
+            mog.apply(frame)
+
+        background = mog.getBackgroundImage()
+        if background is None:
+            # Fallback if MOG2 can't produce a background
+            background = np.median(
+                video_array[self.blank_0:self.blank_n, :, :].astype(float), axis=0
+            ).astype(int)
+
+        spot_stack = np.subtract(video_array.astype(float), background.astype(float)).astype(int)
+        return spot_stack, background
+
+    def _subtract_bg_running_avg(self, video_array, alpha=0.05):
+        '''Running average background — fastest method, good for stable lighting.'''
+        if self.debug: print('detector._subtract_bg_running_avg')
+
+        avg = video_array[self.blank_0].astype(np.float32)
+        for i in range(self.blank_0 + 1, self.blank_n):
+            cv2.accumulateWeighted(video_array[i].astype(np.float32), avg, alpha)
+
+        background = avg.astype(int)
+        spot_stack = np.subtract(video_array.astype(float), background.astype(float)).astype(int)
         return spot_stack, background   
 
 
@@ -500,7 +558,7 @@ class detector(object):
         
         ## Testing threshold input value
         try: threshold = int(threshold)
-        except: pass
+        except (ValueError, TypeError): pass
     
         ## Assembling histogram parameters
         set_cm = plt.cm.get_cmap('coolwarm')
@@ -725,8 +783,8 @@ class detector(object):
                 ## Rounding results so they are more manageable and require less space.
                 self.result[i][1:3] = [int(item) for item in self.result[i][1:3]]
                 self.result[i][3:] = [round(item,4) for item in self.result[i][3:]]
-            except:
-                print('Warning:: Could not process vial %s' % i)
+            except Exception as e:
+                print('Warning:: Could not process vial %s: %s' % (i, e))
         return
 
     def get_trim_lines(self,df,edge = 'top',sensitivity=1):
@@ -868,8 +926,8 @@ class detector(object):
                 if _result[-2] >= 0.05: _result[2] = 0
 
             ## Have row of NaN if unable to process
-            except: _result = [start,stop] + [np.nan,np.nan,np.nan,np.nan]
-#             except: _result = [start,stop] + [np.nan,np.nan,np.nan,np.nan,np.nan,np.nan]
+            except Exception:
+                _result = [start,stop] + [np.nan,np.nan,np.nan,np.nan]
 
             ## Add results list to a list of lists
             result_list.append(_result)
@@ -935,13 +993,49 @@ class detector(object):
 
 
     def step_2(self):
-        '''Performs spot detection and manipulates the resulting DataFrames'''
+        '''Performs spot detection and optionally links particles for individual tracking'''
         print('-- [ Step 2  ] Identifying spots')
 
         ## Particle detection step
         self.df_big = self.particle_finder(minmass=self.minmass,diameter=self.diameter,
                                             maxsize=self.maxsize, invert=True)
         if self.debug: print('                   Identified %s spots' % self.df_big.shape[0])
+
+        ## Individual fly tracking (optional)
+        individual_tracking = getattr(self, 'individual_tracking', False)
+        if individual_tracking:
+            print('-- [ Step 2b ] Linking particles for individual tracking')
+            search_range = getattr(self, 'search_range', max(self.diameter * 2, 15))
+            memory = getattr(self, 'link_memory', 3)
+            try:
+                tp.quiet()
+                linked = tp.link(self.df_big, search_range=search_range, memory=memory,
+                                 adaptive_stop=2, adaptive_step=0.9)
+                linked = tp.filter_stubs(linked, threshold=10)
+                n_tracks = linked.particle.nunique()
+                print(f'                   Linked {n_tracks} individual fly tracks')
+
+                # Compute drift correction if enough tracks
+                if n_tracks >= 2:
+                    try:
+                        drift = tp.compute_drift(linked)
+                        linked = tp.subtract_drift(linked, drift)
+                        if self.debug: print('                   Drift correction applied')
+                    except Exception as e:
+                        if self.debug: print(f'                   Drift correction skipped: {e}')
+
+                # Track quality: completeness per fly
+                total_frames = linked.frame.nunique()
+                track_quality = linked.groupby('particle').frame.nunique() / total_frames
+                linked['track_completeness'] = linked.particle.map(track_quality)
+
+                self.df_big = linked
+                self.has_individual_tracking = True
+            except Exception as e:
+                print(f'!! Individual tracking failed: {e}. Continuing with population mode.')
+                self.has_individual_tracking = False
+        else:
+            self.has_individual_tracking = False
         return
 
 
@@ -976,7 +1070,7 @@ class detector(object):
             # NEW: Save frame 0 and final frame versions
             try:
                 last_idx = int(self.frame_range[1])
-            except:
+            except (AttributeError, IndexError, ValueError):
                 last_idx = 0
 
             # Frame 0
@@ -1162,7 +1256,7 @@ class detector(object):
         # Final frame overlay (new)
         try:
             final_frame = int(spots.frame.max())
-        except:
+        except (ValueError, TypeError):
             final_frame = None
 
         if final_frame is not None:
@@ -1234,7 +1328,7 @@ class detector(object):
         
         ## Get frame number
         try: frame = int(frame)
-        except: frame = None
+        except (ValueError, TypeError): frame = None
 
         ## Assign plotting parameters depending on which frame(s)
         if type(frame) == int and frame in df.frame.unique():
@@ -1408,7 +1502,7 @@ class detector(object):
                 fit = linregress(t_plot, x_plot)
                 x_fit = fit.intercept + fit.slope * t_plot
                 ax.plot(t_plot, x_fit, color=self.color_list[vial - 1], alpha=0.35)
-            except:
+            except (ValueError, TypeError):
                 pass
 
             # Set labels once (safe even if called multiple times)
