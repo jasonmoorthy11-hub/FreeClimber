@@ -36,7 +36,7 @@ dependencies = [
     "matplotlib>=3.8",
     "trackpy>=0.6",
     "opencv-python>=4.8",
-    "wxPython>=4.2",
+    "customtkinter>=5.2",
 ]
 
 [project.optional-dependencies]
