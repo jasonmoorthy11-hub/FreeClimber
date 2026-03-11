@@ -87,7 +87,7 @@ def compute_per_fly_metrics(df: pd.DataFrame, frame_rate: int = 30,
         y_vals = (track.y.values[0] - track.y.values).astype(float)
         if convert_to_cm_sec:
             y_vals = y_vals / pixel_to_cm
-        _trapz = getattr(np, 'trapezoid', np.trapz)
+        _trapz = np.trapezoid if hasattr(np, 'trapezoid') else np.trapz
         auc = float(_trapz(y_vals, time_vals)) if len(time_vals) > 1 else 0.0
 
         results.append({
