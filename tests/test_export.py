@@ -3,13 +3,17 @@
 import os
 import sys
 import tempfile
-import pytest
+
 import pandas as pd
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 from output.export import (
-    export_slopes_csv, export_tidy_csv, export_prism_csv, export_per_fly_tracks,
+    export_per_fly_tracks,
+    export_prism_csv,
+    export_slopes_csv,
+    export_tidy_csv,
 )
 
 

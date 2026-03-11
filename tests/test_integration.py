@@ -2,9 +2,10 @@
 
 import os
 import sys
-import pytest
+
 import numpy as np
 import pandas as pd
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
@@ -82,8 +83,8 @@ class TestFullPipeline:
         if not os.path.exists(slopes_path):
             pytest.skip("No known-good slopes CSV")
 
-        from analysis.stats import compare_multiple_groups, publication_stats_table
         from analysis.metrics import compute_population_metrics
+        from analysis.stats import compare_multiple_groups, publication_stats_table
 
         slopes_df = pd.read_csv(slopes_path)
         non_all = slopes_df[~slopes_df.iloc[:, 0].astype(str).str.endswith('_all')]

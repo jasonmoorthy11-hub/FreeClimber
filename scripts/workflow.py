@@ -4,10 +4,10 @@ Coordinates motor, camera, and FreeClimber analysis for
 fully automated RING assay experiments.
 """
 
+import logging
 import os
 import sys
 import time
-import logging
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

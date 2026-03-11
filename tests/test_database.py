@@ -2,13 +2,18 @@
 
 import os
 import sys
+
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 from output.database import (
-    init_db, save_experiment, save_video, save_slopes,
-    query_experiments, query_slopes,
+    init_db,
+    query_experiments,
+    query_slopes,
+    save_experiment,
+    save_slopes,
+    save_video,
 )
 
 

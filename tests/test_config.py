@@ -3,14 +3,19 @@
 import os
 import sys
 import tempfile
+
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 from config import (
-    load_config, save_config, validate_config,
-    apply_config, parse_variable_list, _parse_value,
     KNOWN_PARAMS,
+    _parse_value,
+    apply_config,
+    load_config,
+    parse_variable_list,
+    save_config,
+    validate_config,
 )
 
 
@@ -72,7 +77,7 @@ class TestLoadConfig:
             f.write('x=42\n')
             f.write('\n')
             f.write('y=10\n')
-            f.name
+            _ = f.name
         try:
             params = load_config(f.name)
             assert params == {'x': 42, 'y': 10}

@@ -4,10 +4,11 @@ Supports: slopes CSV (backward compatible), tidy CSV (R-ready),
 Excel workbook, GraphPad Prism format, per-fly tracks.
 """
 
+import logging
 import os
+
 import numpy as np
 import pandas as pd
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ def export_excel(slopes_df: pd.DataFrame, path: str,
     """
     try:
         import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.styles import Alignment, Font, PatternFill
     except ImportError:
         logger.warning("openpyxl not installed; saving as plain CSV instead")
         slopes_df.to_csv(path.replace('.xlsx', '.csv'), index=False)

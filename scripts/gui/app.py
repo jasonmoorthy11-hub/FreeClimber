@@ -17,17 +17,17 @@ from tkinter import filedialog, messagebox
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 import customtkinter as ctk
+import matplotlib
 import numpy as np
 import pandas as pd
-import matplotlib
+
 matplotlib.use("TkAgg")
+import matplotlib.pyplot as plt
+from gui.controller import AnalysisController
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 
-from gui.controller import AnalysisController
-
-import matplotlib.pyplot as plt
 plt.rcParams.update({
     'figure.facecolor': '#1a1a2e',
     'axes.facecolor': '#16213e',
@@ -459,7 +459,7 @@ class FreeClimberApp(ctk.CTk):
         table_frame.grid_columnconfigure(0, weight=1)
 
         # Use tkinter Treeview for the data table
-        style = self._configure_treeview_style()
+        self._configure_treeview_style()
         self.slopes_tree = tk.ttk.Treeview(table_frame, show="headings", style="Dark.Treeview")
         self.slopes_tree.grid(row=0, column=0, sticky="nsew")
 
@@ -948,8 +948,12 @@ class FreeClimberApp(ctk.CTk):
     def _populate_statistics(self, df: pd.DataFrame):
         try:
             from analysis.stats import (
-                check_normality, compare_two_groups, compare_multiple_groups,
-                cohens_d, confidence_interval, publication_stats_table,
+                check_normality,
+                cohens_d,
+                compare_multiple_groups,
+                compare_two_groups,
+                confidence_interval,
+                publication_stats_table,
             )
         except ImportError:
             self._set_stats_text("Statistics module not available.")

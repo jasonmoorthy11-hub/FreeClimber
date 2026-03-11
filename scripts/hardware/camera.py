@@ -3,10 +3,10 @@
 Uses picamera2 on Pi, mock mode (reads example video) on other systems.
 """
 
-import os
-import time
 import logging
+import os
 import platform
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class RINGCamera:
         if platform.system() != 'Linux':
             return False
         try:
-            with open('/proc/device-tree/model', 'r') as f:
+            with open('/proc/device-tree/model') as f:
                 return 'raspberry pi' in f.read().lower()
         except FileNotFoundError:
             return False
@@ -107,8 +107,8 @@ class RINGCamera:
         """Generator yielding JPEG frames for live preview (MJPEG stream)."""
         if self.mock:
             # Yield a placeholder frame
-            import numpy as np
             import cv2
+            import numpy as np
             placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
             cv2.putText(placeholder, "MOCK CAMERA", (150, 250),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2)

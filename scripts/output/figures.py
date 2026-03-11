@@ -3,12 +3,13 @@
 Colorblind-safe palettes, journal formatting, 300 DPI export.
 """
 
+import logging
+
+import matplotlib.cm as cm
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 from matplotlib.lines import Line2D
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ def bar_chart_with_points(groups: dict, ylabel: str = 'Climbing Speed',
     names = list(groups.keys())
     x_positions = np.arange(len(names))
 
-    for i, (name, values) in enumerate(groups.items()):
+    for i, (_name, values) in enumerate(groups.items()):
         values = np.asarray(values, dtype=float)
         values = values[~np.isnan(values)]
         mean = np.mean(values)
@@ -231,7 +232,7 @@ def per_fly_trajectory_overlay(df: pd.DataFrame, first_frame: np.ndarray = None,
         return ax
 
     colors = get_color_palette(vials)
-    for pid, track in df.groupby('particle'):
+    for _pid, track in df.groupby('particle'):
         track = track.sort_values('frame')
         vial = int(track.vial.mode().iloc[0]) if 'vial' in track.columns else 1
         color = colors[(vial - 1) % len(colors)]

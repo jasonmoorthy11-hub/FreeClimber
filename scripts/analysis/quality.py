@@ -4,9 +4,10 @@ Assigns confidence scores to per-vial and per-video results so
 non-technical users know when to trust results vs re-run.
 """
 
+import logging
+
 import numpy as np
 import pandas as pd
-import logging
 
 logger = logging.getLogger(__name__)
 

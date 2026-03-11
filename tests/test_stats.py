@@ -2,15 +2,21 @@
 
 import os
 import sys
+
 import numpy as np
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 from analysis.stats import (
-    check_normality, compare_two_groups, compare_multiple_groups,
-    cohens_d, confidence_interval, publication_stats_table,
-    correct_pvalues, dunnett_vs_control,
+    check_normality,
+    cohens_d,
+    compare_multiple_groups,
+    compare_two_groups,
+    confidence_interval,
+    correct_pvalues,
+    dunnett_vs_control,
+    publication_stats_table,
 )
 
 

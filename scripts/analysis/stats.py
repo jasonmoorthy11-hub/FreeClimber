@@ -4,11 +4,12 @@ Automated parametric vs non-parametric test selection with post-hoc
 comparisons and effect sizes. Publication-ready output.
 """
 
+import logging
+from itertools import combinations
+
 import numpy as np
 import pandas as pd
 from scipy import stats
-import logging
-from itertools import combinations
 
 logger = logging.getLogger(__name__)
 

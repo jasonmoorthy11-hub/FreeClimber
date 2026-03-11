@@ -6,11 +6,11 @@ a progress callback.
 """
 from __future__ import annotations
 
+import logging
 import os
+import queue
 import sys
 import threading
-import queue
-import logging
 
 # Bootstrap sys.path so bare imports work from any launch location
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -159,8 +159,10 @@ class AnalysisController:
             raise RuntimeError("No results to export — run analysis first")
 
         from output.export import (
-            export_slopes_csv, export_tidy_csv, export_prism_csv,
             export_per_fly_tracks,
+            export_prism_csv,
+            export_slopes_csv,
+            export_tidy_csv,
         )
 
         if fmt == 'csv':

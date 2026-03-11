@@ -3,9 +3,10 @@
 Control referencing, batch correction, fly count adjustment.
 """
 
+import logging
+
 import numpy as np
 import pandas as pd
-import logging
 
 logger = logging.getLogger(__name__)
 

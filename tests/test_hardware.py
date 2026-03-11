@@ -5,10 +5,9 @@ import tempfile
 
 import pytest
 
-from scripts.hardware.motor import RINGMotor, DEFAULT_PUL_PIN, DEFAULT_DIR_PIN
 from scripts.hardware.camera import RINGCamera
+from scripts.hardware.motor import DEFAULT_DIR_PIN, DEFAULT_PUL_PIN, RINGMotor
 from scripts.workflow import RINGWorkflow
-
 
 # --- Motor tests ---
 

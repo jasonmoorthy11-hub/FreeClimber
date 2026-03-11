@@ -5,8 +5,8 @@ Backward compatible with existing .cfg files (same key=value format).
 """
 
 import ast
-import os
 import logging
+import os
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -108,7 +108,7 @@ def load_config(filepath: str) -> dict:
     if not os.path.isfile(filepath):
         raise FileNotFoundError(f"Config file not found: {filepath}")
 
-    with open(filepath, 'r') as f:
+    with open(filepath) as f:
         for line_num, raw_line in enumerate(f, 1):
             line = raw_line.strip()
 

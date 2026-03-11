@@ -2,13 +2,14 @@
 
 import os
 import sys
+
 import numpy as np
 import pandas as pd
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from analysis.metrics import compute_per_fly_metrics, compute_population_metrics, climbing_index
+from analysis.metrics import climbing_index, compute_per_fly_metrics, compute_population_metrics
 
 
 class TestPerFlyMetrics:
@@ -66,5 +67,5 @@ class TestClimbingIndex:
     def test_basic(self, sample_tracking_df):
         result = climbing_index(sample_tracking_df)
         assert isinstance(result, dict)
-        for vial, idx in result.items():
+        for _vial, idx in result.items():
             assert 0 <= idx <= 100

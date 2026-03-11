@@ -3,10 +3,11 @@
 Requires individual tracking (particle column in DataFrame).
 """
 
+import logging
+
 import numpy as np
 import pandas as pd
 from scipy.stats import linregress
-import logging
 
 logger = logging.getLogger(__name__)
 

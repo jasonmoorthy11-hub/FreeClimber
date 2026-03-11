@@ -5,8 +5,8 @@ HTML: Plotly interactive standalone page
 """
 from __future__ import annotations
 
-import os
 import logging
+import os
 from datetime import datetime
 
 import numpy as np
@@ -35,15 +35,15 @@ def generate_pdf_report(
     """
     try:
         from jinja2 import Template
-    except ImportError:
+    except ImportError as err:
         logger.error("jinja2 not installed — pip install jinja2")
-        raise ImportError("PDF reports require jinja2: pip install jinja2")
+        raise ImportError("PDF reports require jinja2: pip install jinja2") from err
 
     try:
         from weasyprint import HTML as WeasyprintHTML
-    except ImportError:
+    except ImportError as err:
         logger.error("weasyprint not installed — pip install weasyprint")
-        raise ImportError("PDF reports require weasyprint: pip install weasyprint")
+        raise ImportError("PDF reports require weasyprint: pip install weasyprint") from err
 
     import base64
     from io import BytesIO
@@ -111,11 +111,11 @@ def generate_html_report(
     """
     try:
         import plotly.graph_objects as go
-        from plotly.subplots import make_subplots
         import plotly.io as pio
-    except ImportError:
+        from plotly.subplots import make_subplots
+    except ImportError as err:
         logger.error("plotly not installed — pip install plotly")
-        raise ImportError("HTML reports require plotly: pip install plotly")
+        raise ImportError("HTML reports require plotly: pip install plotly") from err
 
     # Find slope column
     slope_col = None

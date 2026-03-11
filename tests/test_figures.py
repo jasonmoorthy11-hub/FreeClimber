@@ -2,6 +2,7 @@
 
 import os
 import sys
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -9,14 +10,20 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 import matplotlib
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
 from output.figures import (
-    get_color_palette, setup_publication_style,
-    bar_chart_with_points, box_swarm_plot, trajectory_plot,
-    speed_distribution, per_fly_trajectory_overlay,
-    per_fly_metrics_heatmap, batch_comparison, save_figure,
+    bar_chart_with_points,
+    batch_comparison,
+    box_swarm_plot,
+    get_color_palette,
+    per_fly_metrics_heatmap,
+    per_fly_trajectory_overlay,
+    save_figure,
+    setup_publication_style,
+    speed_distribution,
+    trajectory_plot,
 )
 
 

@@ -2,13 +2,14 @@
 
 import os
 import sys
+
 import numpy as np
 import pandas as pd
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from analysis.normalization import normalize_to_control, batch_zscore, adjust_for_fly_count
+from analysis.normalization import adjust_for_fly_count, batch_zscore, normalize_to_control
 
 
 class TestNormalizeToControl:

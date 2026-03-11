@@ -4,8 +4,8 @@ Overlay detected particles, ROI boundaries, vial lines, and trajectory trails
 onto the original video.  Output as H.264 .mp4.
 """
 
-import os
 import logging
+import os
 
 import cv2
 import numpy as np
@@ -58,7 +58,7 @@ def export_annotated_video(
     """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        raise IOError(f"Cannot open video: {video_path}")
+        raise OSError(f"Cannot open video: {video_path}")
 
     src_fps = cap.get(cv2.CAP_PROP_FPS)
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -73,7 +73,7 @@ def export_annotated_video(
 
     if not out.isOpened():
         cap.release()
-        raise IOError(f"Cannot create output video: {output_path}")
+        raise OSError(f"Cannot create output video: {output_path}")
 
     # Pre-index positions by frame for fast lookup
     frame_data = {}
@@ -140,7 +140,7 @@ def export_annotated_video(
 
         # Draw trails
         if show_trails and has_particle:
-            for pid, trail in trail_history.items():
+            for _pid, trail in trail_history.items():
                 if len(trail) < 2:
                     continue
                 for i in range(1, len(trail)):
@@ -178,7 +178,7 @@ def export_annotated_stills(
     """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        raise IOError(f"Cannot open video: {video_path}")
+        raise OSError(f"Cannot open video: {video_path}")
 
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 

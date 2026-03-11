@@ -9,10 +9,10 @@ CRITICAL: Physical pin numbers != GPIO/BCM numbers!
 - Physical 6 = GND
 """
 
-import time
-import logging
 import atexit
+import logging
 import platform
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ class RINGMotor:
         if platform.system() != 'Linux':
             return False
         try:
-            with open('/proc/device-tree/model', 'r') as f:
+            with open('/proc/device-tree/model') as f:
                 return 'raspberry pi' in f.read().lower()
         except FileNotFoundError:
             return False
