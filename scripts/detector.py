@@ -67,7 +67,7 @@ class detector:
         self.check_variable_formats()
 
         ## Setting a color map
-        self.vial_color_map = cm.jet
+        self.vial_color_map = cm.viridis
 
         ## Create a conversion factor
         if self.convert_to_cm_sec:
@@ -1104,6 +1104,11 @@ class detector:
                 n_tracks = linked.particle.nunique()
                 print(f'                   Linked {n_tracks} individual fly tracks')
 
+                if n_tracks == 0:
+                    print('!! No tracks survived filter_stubs. Continuing with population mode.')
+                    self.has_individual_tracking = False
+                    return
+
                 # Compute drift correction if enough tracks
                 if n_tracks >= 2:
                     try:
@@ -1253,7 +1258,7 @@ class detector:
         ## End of publication insert
         ########################################
 
-        self.df_big.loc[not self.df_big['True_particle'],'vial'] = 0
+        self.df_big.loc[~self.df_big['True_particle'],'vial'] = 0
 
         print('-- [ Step 4f ]   - Saving raw data file')
         ## Saving the TrackPy results, plus filter and vial notations

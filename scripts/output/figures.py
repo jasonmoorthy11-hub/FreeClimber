@@ -112,7 +112,9 @@ def box_swarm_plot(groups: dict, ylabel: str = 'Climbing Speed',
     names = list(groups.keys())
     data = [np.asarray(v, dtype=float)[~np.isnan(np.asarray(v, dtype=float))] for v in groups.values()]
 
-    bp = ax.boxplot(data, tick_labels=names, patch_artist=True, widths=0.5,
+    import matplotlib
+    _lk = 'tick_labels' if tuple(int(x) for x in matplotlib.__version__.split('.')[:2]) >= (3, 9) else 'labels'
+    bp = ax.boxplot(data, **{_lk: names}, patch_artist=True, widths=0.5,
                     medianprops={'color': 'black', 'linewidth': 1.5})
 
     for patch, color in zip(bp['boxes'], colors):

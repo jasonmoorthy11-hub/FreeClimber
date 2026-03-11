@@ -41,7 +41,7 @@ KNOWN_PARAMS = {
     'convert_to_cm_sec':    (bool,  False,  None, None,  'Convert final slope to cm/sec'),
     'trim_outliers':        (bool,  False,  None, None,  'Trim outlier points at edges'),
     'background_method':    (str,   'temporal_median', None, None, 'Background subtraction method: temporal_median, mog2, or running_average'),
-    'individual_tracking':  (bool,  False,  None, None,  'Enable per-fly individual tracking via tp.link'),
+    'individual_tracking':  (bool,  True,   None, None,  'Enable per-fly individual tracking via tp.link'),
 }
 
 
