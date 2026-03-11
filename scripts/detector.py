@@ -978,6 +978,31 @@ class detector(object):
             plt.savefig(plot_name, dpi=100)
             plt.close()
             print('                --> Saved:',plot_name.split('/')[-1])
+
+            # NEW: Save frame 0 and final frame versions
+            try:
+                last_idx = int(self.frame_range[1])
+            except:
+                last_idx = 0
+
+            # Frame 0
+            plt.figure()
+            self.display_images(self.clean_stack, self.background, self.spot_stack, frame=0)
+            plt.tight_layout()
+            plot0 = self.name_nosuffix + '.processed_frame0.png'
+            plt.savefig(plot0, dpi=100)
+            plt.close()
+            print('                --> Saved:', plot0.split('/')[-1])
+
+            # Final frame
+            plt.figure()
+            self.display_images(self.clean_stack, self.background, self.spot_stack, frame=last_idx)
+            plt.tight_layout()
+            plotL = self.name_nosuffix + '.processed_finalframe.png'
+            plt.savefig(plotL, dpi=100)
+            plt.close()
+            print('                --> Saved:', plotL.split('/')[-1])
+
         return
 
     def step_4(self):
@@ -1115,9 +1140,12 @@ class detector(object):
             plt.close()
             
         print('-- [ step 6b ] Creating diagnostic plot file')
-        ## Set up plots
-        plt.figure(figsize=(10,8))
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(nrows=2, ncols=2)
+                ## Set up plots (now includes x-plot + final frame)
+        plt.figure(figsize=(12, 10))
+        fig, axes = plt.subplots(nrows=3, ncols=2)
+        ax1, ax2 = axes[0, 0], axes[0, 1]
+        ax3, ax4 = axes[1, 0], axes[1, 1]
+        ax5, ax6 = axes[2, 0], axes[2, 1]
 
         ## Finding the frames that flank the most linear portion 
         ##    of the y vs. t curve for all points, not just by vials
@@ -1132,22 +1160,28 @@ class detector(object):
         ## Need only True spots, but not inverted -- df_big
         spots = self.df_big[self.df_big.True_particle]
 
-        ## Creating the diagnostic plot
-        print('-- [ step 6b1] Plotting image plots with overlaying points')        
-        if self.debug: print("-- [ step 6b1] Plotting data: Plot 1 - Frame %s" % begin)
-        self.image_plot(df = spots,frame = begin, ax=ax1)
+        # Image overlays: begin/end of most-linear segment + all points
+        self.image_plot(df=spots, frame=begin, ax=ax1)
+        self.image_plot(df=spots, frame=int(end), ax=ax2)
+        self.image_plot(df=spots, frame=None, ax=ax4)
 
-        if self.debug: print("-- [ step 6b1] Plotting data: Plot 2 - Frame %s" % end)
-        self.image_plot(df = spots, ax=ax2, frame = int(str(end)))
+        # Final frame overlay (new)
+        try:
+            final_frame = int(spots.frame.max())
+        except:
+            final_frame = None
 
-        if self.debug: print("-- [ step 6b1] Plotting data: Plot 3 - Frame ALL")
-        self.image_plot(df = spots,ax=ax4, frame = None)
+        if final_frame is not None:
+            self.image_plot(df=spots, frame=final_frame, ax=ax6)
+        else:
+            ax6.set_axis_off()
+            ax6.set_title("Final frame unavailable")
 
-        print('-- [ step 6b2] Performing local linear regression')
+        # Local linear regression results (y) + new horizontal tracker (x)
         self.get_slopes()
-        
-        print('-- [ step 6b3] Plotting local linear regression results')
         self.loclin_plot(ax=ax3)
+        self.loclin_plot_x(ax=ax5)
+
 
         ## Saving diagnostic plot
         fig.tight_layout()
@@ -1309,6 +1343,17 @@ class detector(object):
 
         ## Add on labels and legends
         ax.legend(loc=2, frameon=False, fontsize='x-small')
+
+        # Axis labels
+        if self.convert_to_cm_sec:
+            ax.set_xlabel("Time (s)")
+            ax.set_ylabel("Mean vertical position (cm)")
+        else:
+            ax.set_xlabel("Frame")
+            ax.set_ylabel("Mean vertical position (pixels)")
+
+        ax.set_title("Mean vertical position over time")
+
         label_y,label_x = 'pixels','Frames'
         if self.convert_to_cm_sec: 
             label_x = 'Seconds'
@@ -1320,6 +1365,74 @@ class detector(object):
         
         if ax == None: return
         else: return ax
+    def loclin_plot_x(self, ax=None):
+        """
+        Horizontal position plot: mean x-position vs. frame/time.
+        Colored by vial and bolded for the SAME most-linear segment boundaries used for y
+        (i.e., first_frame/last_frame stored in self.result from vertical regression).
+        """
+        if self.debug: print('detector.loclin_plot_x')
+
+        from scipy.stats import linregress
+
+        if ax is None:
+            ax = plt.gca()
+
+        def bold_segment(df, vial, label, first, last, ax=None):
+            """Plot the highlighted segment (and optionally the fit line) for mean x."""
+            if ax is None:
+                ax = plt.gca()
+
+            df_seg = df[(df.frame >= first) & (df.frame <= last)]
+            if df_seg.empty:
+                return
+
+            t = df_seg.groupby('frame').frame.mean()
+            x = df_seg.groupby('frame').x.mean()
+
+            # Convert to seconds and cm if requested
+            if self.convert_to_cm_sec:
+                t_plot = t / self.frame_rate
+                x_plot = x / self.pixel_to_cm
+                xlabel = "Time (s)"
+                ylabel = "Mean horizontal position (cm)"
+            else:
+                t_plot = t
+                x_plot = x
+                xlabel = "Frame"
+                ylabel = "Mean horizontal position (pixels)"
+
+            # Plot the bold segment
+            ax.plot(
+                t_plot, x_plot,
+                color=self.color_list[vial - 1],
+                label=label
+            )
+
+            # Optional: plot a fitted line on the bold segment (nice for “tracker” feel)
+            try:
+                fit = linregress(t_plot, x_plot)
+                x_fit = fit.intercept + fit.slope * t_plot
+                ax.plot(t_plot, x_fit, color=self.color_list[vial - 1], alpha=0.35)
+            except:
+                pass
+
+            # Set labels once (safe even if called multiple times)
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
+
+        # If slopes were computed, plot by vial
+        if hasattr(self, "result") and len(self.result) > 1:
+            for V in range(1, self.vials + 1):
+                details = self.result[V]  # [vial_ID, first_frame, last_frame, slope, ...]
+                first_f = int(details[1])
+                last_f = int(details[2])
+                label = f"Vial {V}"
+                bold_segment(self.vial[V], vial=V, label=label, first=first_f, last=last_f, ax=ax)
+
+        ax.legend(loc=2, frameon=False, fontsize='x-small')
+        ax.set_title("Mean horizontal position over time")
+        return
 
     ## Parameter testing is only used in the GUI
     def parameter_testing(self, variables, axes):

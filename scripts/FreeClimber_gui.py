@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*- 
 
 ## File name : FreeClimber_main.py
-## Created by: Adam N. Spierer
+## Created by: Adam N. Spierer, Modified by Jason Moorthy
 ## Date      : May 2020
 ## Purpose   : Graphical User Interface wrapper for FreeClimber
 
@@ -13,6 +13,7 @@ doi =  'https://doi.org/10.1242/jeb.229377' ## Link to published paper
 ## More universal modules
 import wx
 import os
+import glob
 import sys
 import time
 import argparse
@@ -50,11 +51,103 @@ class main_gui(wx.Frame):
         self.args = args
         self.initialize_controls(parent)
         self.box_sizer.Add(self.panel1, 0, wx.EXPAND)
+        ## Main content area: notebook with Diagnostics + Results tabs
+        self.notebook = wx.Notebook(self)
+        self.box_sizer.Add(self.notebook, 1, wx.EXPAND)
 
-        ## Initialize GUI plot
+        ## Diagnostics tab (existing matplotlib canvas)
+        self.panel_diag = wx.Panel(self.notebook)
+        self.notebook.AddPage(self.panel_diag, "Diagnostics")
+        diag_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.panel_diag.SetSizer(diag_sizer)
+
         self.figure = Figure()
-        self.canvas = FigureCanvas(self, -1, self.figure)
-        self.box_sizer.Add(self.canvas, 1, wx.EXPAND)
+        self.canvas = FigureCanvas(self.panel_diag, -1, self.figure)
+        diag_sizer.Add(self.canvas, 1, wx.EXPAND)
+
+        ## Results tab (persistent summary + table + plots)
+        self.panel_results = wx.Panel(self.notebook)
+        self.notebook.AddPage(self.panel_results, "Results")
+        results_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.panel_results.SetSizer(results_sizer)
+
+        # Results tab (persistent, non-overlapping): splitter = top (explain + table) / bottom (plot)
+        self.results_splitter = wx.SplitterWindow(self.panel_results, style=wx.SP_LIVE_UPDATE | wx.SP_3D)
+        results_sizer.Add(self.results_splitter, 1, wx.EXPAND | wx.ALL, 8)
+
+        self.results_top = wx.Panel(self.results_splitter)
+        self.results_bottom = wx.Panel(self.results_splitter)
+
+        # --- Top pane: summary + explanations + slopes table ---
+        top_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.results_top.SetSizer(top_sizer)
+
+        self.results_header = wx.StaticText(self.results_top, label='Results (run an analysis to populate)')
+        top_sizer.Add(self.results_header, 0, wx.BOTTOM, 6)
+
+        self.results_explain = wx.TextCtrl(self.results_top, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.BORDER_NONE)
+        self.results_explain.SetMinSize((-1, 110))
+        self.results_explain.SetValue(
+            """How to read these results:
+
+• slopes.csv is the main output. Each row is one vial (plus an optional summary row).
+• slope: estimated climbing speed (pixels/frame, or cm/sec if you enabled Convert to cm/sec).
+• intercept: fitted y value at frame 0 for the regression window.
+• r_value: goodness-of-fit of the straight-line model (closer to 1.0 = more linear).
+• p_value: significance of the linear trend (smaller = more confident slope).
+• std_err: uncertainty on slope (smaller = more precise).
+
+QC tips:
+• If slope is ~0 or negative, flies may not be climbing or tracking failed.
+• Check Diagnostics: detections should sit on flies; vials should stay separated horizontally.
+"""
+        )
+        top_sizer.Add(self.results_explain, 0, wx.EXPAND | wx.BOTTOM, 6)
+
+        self.slopes_table = wx.ListCtrl(self.results_top, style=wx.LC_REPORT | wx.BORDER_SUNKEN)
+        self.slopes_table.SetMinSize((-1, 240))
+        top_sizer.Add(self.slopes_table, 1, wx.EXPAND)
+
+        # --- Bottom pane: plots ---
+        bottom_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.results_bottom.SetSizer(bottom_sizer)
+
+        # Notebook so we can show multiple result plots clearly.
+        self.results_plotbook = wx.Notebook(self.results_bottom)
+        bottom_sizer.Add(self.results_plotbook, 1, wx.EXPAND)
+
+        # Plot 1: slopes / climbing speed
+        self.results_plot_panel_speed = wx.Panel(self.results_plotbook)
+        sp_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.results_plot_panel_speed.SetSizer(sp_sizer)
+        self.results_figure_speed = Figure(figsize=(5, 3))
+        self.results_canvas_speed = FigureCanvas(self.results_plot_panel_speed, -1, self.results_figure_speed)
+        sp_sizer.Add(self.results_canvas_speed, 1, wx.EXPAND)
+        self.results_plotbook.AddPage(self.results_plot_panel_speed, "Speed")
+
+        # Plot 2: mean horizontal position over time (QC for vial separation/drift)
+        self.results_plot_panel_x = wx.Panel(self.results_plotbook)
+        xp_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.results_plot_panel_x.SetSizer(xp_sizer)
+        self.results_figure_x = Figure(figsize=(5, 3))
+        self.results_canvas_x = FigureCanvas(self.results_plot_panel_x, -1, self.results_figure_x)
+        xp_sizer.Add(self.results_canvas_x, 1, wx.EXPAND)
+        self.results_plotbook.AddPage(self.results_plot_panel_x, "Horizontal (X)")
+
+        # Plot 3: mean vertical position over time (mirrors Diagnostics plot, but zoomable here)
+        self.results_plot_panel_y = wx.Panel(self.results_plotbook)
+        yp_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.results_plot_panel_y.SetSizer(yp_sizer)
+        self.results_figure_y = Figure(figsize=(5, 3))
+        self.results_canvas_y = FigureCanvas(self.results_plot_panel_y, -1, self.results_figure_y)
+        yp_sizer.Add(self.results_canvas_y, 1, wx.EXPAND)
+        self.results_plotbook.AddPage(self.results_plot_panel_y, "Vertical (Y)")
+
+        self.results_splitter.SplitHorizontally(self.results_top, self.results_bottom, sashPosition=360)
+        self.results_splitter.SetMinimumPaneSize(150)
+
+        # Auto-refresh Results when the user clicks the Results tab
+        self.notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnNotebookPageChanged)
 
         ## Default rectangle variable
         self.pressed=False
@@ -168,9 +261,12 @@ class main_gui(wx.Frame):
         if args.debug: print('main_gui.load_video')
         
         ## Set up
-        self.status_bar.SetStatusText("Loading video",0)
         self.figure.clear()
-        self.axes   = [self.figure.add_subplot(111), ]
+        self.axes = [
+            self.figure.add_subplot(121),  # first frame (interactive ROI)
+            self.figure.add_subplot(122)   # last frame (reference)
+]
+
         
         ## Confirm file is a path, or folder has specified suffix
         status = self.check_specified_video()
@@ -192,7 +288,21 @@ class main_gui(wx.Frame):
                                         variables = vars)
             
                 self.axes[0].imshow(self.detector.image_stack[0])
+                self.axes[0].set_title("Frame 0 (ROI selection)")
+                self.axes[0].axis("off")
+
+                # Show last frame as reference
+                try:
+                    self.axes[1].imshow(self.detector.image_stack[-1])
+                    self.axes[1].set_title("Final frame (reference)")
+                    self.axes[1].axis("off")
+                except:
+                    self.axes[1].set_title("Final frame unavailable")
+                    self.axes[1].axis("off")
+
+                self.figure.tight_layout()
                 self.figure.canvas.draw()
+
             finally:
                 wx.EndBusyCursor()
             
@@ -233,6 +343,10 @@ class main_gui(wx.Frame):
 
             ## Enable Test parameter button if disabled from prior testing
             self.button_test_parameters.Enable(True)
+            try:
+                self.button_run_full_analysis.Enable(True)
+            except:
+                pass
             self.x0,self.y0 = 0, 0
             self.x1,self.y1 = self.detector.width,self.detector.height
         
@@ -246,7 +360,10 @@ class main_gui(wx.Frame):
         '''Updates the names of variables within the program. Generally variables set for naming files.'''
         if args.debug: print('main_gui.update_names')
         self.status_bar.SetStatusText("Updating file names...",0)
-        self.text_video_path.SetLabelText(self.video_file)
+        # Display selected video path.
+        # Earlier versions used a dedicated TextCtrl (a bright white bar) for this,
+        # but we removed it to reclaim UI space. Keep the status bar as the single
+        # source of truth for the currently selected file.
         self.folder, self.name        = os.path.split(self.video_file)
         self.name,   self.input_file_suffix = self.name.split('.')
 
@@ -260,6 +377,19 @@ class main_gui(wx.Frame):
                 
         ## Set path_project default to the folder of the selected video file
         if self.input_path_project == '': self.input_path_project = self.folder
+
+        # Update bottom-bar label (filename only; full path as tooltip).
+        try:
+            if hasattr(self, "video_path_label"):
+                if self.video_file and os.path.isfile(self.video_file):
+                    base = os.path.basename(self.video_file)
+                    self.video_path_label.SetLabel(f"Video: {base}")
+                    self.video_path_label.SetToolTip(self.video_file)
+                else:
+                    self.video_path_label.SetLabel("No video selected")
+                    self.video_path_label.SetToolTip("")
+        except Exception:
+            pass
         return
         
     def check_specified_video(self):
@@ -394,13 +524,507 @@ class main_gui(wx.Frame):
         self.button_store_parameters.Enable(True)
         if args.debug: print('Parameter testing complete')
         self.status_bar.SetStatusText("Refine detector parameters by reloading the video, or finish optimization by pressing 'Save configuration'",0)
+
+        # Update Results tab if outputs were written
+        try:
+            self.populate_results_tab()
+        except Exception:
+            pass
         return
 
     def OnButton_strParButton(self, event):
         '''Runs the 'save_parameter' function for creating the configuration file'''
         if args.debug: print('main_gui.OnButton_strParButton')
-        self.save_parameter()
-        self.button_store_parameters.SetBackgroundColour(wx.Colour(241,241,241))
+        try:
+            self.status_bar.SetStatusText("Saving configuration...", 0)
+            self.save_parameter()
+            # On macOS the pressed highlight can 'stick' unless we refresh + return focus
+            wx.CallAfter(self.panel1.SetFocus)
+            wx.CallAfter(self.button_store_parameters.SetFocus)
+            wx.CallAfter(self.panel1.Refresh)
+            wx.CallAfter(self.panel1.Update)
+            self.status_bar.SetStatusText("Configuration saved.", 0)
+            wx.MessageBox("Configuration saved (.cfg).", "FreeClimber", wx.OK | wx.ICON_INFORMATION)
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            self.status_bar.SetStatusText("Error saving configuration (see terminal).", 0)
+            wx.MessageBox(f"Error saving configuration:\n\n{e}", "FreeClimber", wx.OK | wx.ICON_ERROR)
+        finally:
+            try:
+                event.Skip()
+            except Exception:
+                pass
+
+    def _set_video_path_label(self, path):
+        """Show a short filename in the bottom bar; keep the full path in a tooltip."""
+        try:
+            import os
+            base = os.path.basename(path) if path else ""
+            if not base:
+                self.video_path_label.SetLabel("")
+                self.video_path_label.SetToolTip("")
+                return
+            # truncate long names but preserve extension
+            if len(base) > 60:
+                root, ext = os.path.splitext(base)
+                base = (root[:45] + "…" + root[-10:] + ext) if len(root) > 58 else (root[:57] + "…" + ext)
+            self.video_path_label.SetLabel(base)
+            self.video_path_label.SetToolTip(path)
+        except Exception:
+            pass
+
+
+    def OnButton_runFullButton(self, event):
+        '''Runs full processing (same pipeline as Test parameters) and writes output files.'''
+        # The safest approach is to reuse the already-working GUI pipeline:
+        # detector.parameter_testing(...) runs steps 1–7 and saves the outputs.
+        try:
+            debug = False
+            try:
+                debug = bool(getattr(globals().get('args', None), 'debug', False))
+            except Exception:
+                debug = False
+            if debug:
+                print('main_gui.OnButton_runFullButton')
+
+            # Guardrail: ensure a video is selected
+            video_file = getattr(self, 'video_file', None)
+            if (video_file is None) or (str(video_file).strip() == ''):
+                wx.MessageBox("Please select a video first (Step 1a: Browse...).",
+                              "FreeClimber", wx.OK | wx.ICON_INFORMATION)
+                return
+
+            # Run the same workflow as the Test button (this already saves outputs)
+            self.OnButton_testParButton(event)
+
+            # Populate Results tab
+            try:
+                self.populate_results_tab()
+                self.notebook.ChangeSelection(1)  # Results tab
+            except Exception as e:
+                import traceback
+                tb = traceback.format_exc(limit=20)
+                # Make the failure visible (previous versions silently swallowed it)
+                try:
+                    self.results_explain.SetValue(
+                        "Error rendering results. The analysis may have completed, but the GUI failed to load the output files.\n\n"
+                        + str(e)
+                        + "\n\n"
+                        + tb
+                    )
+                except Exception:
+                    pass
+                wx.MessageBox(
+                    "Analysis finished, but the Results view couldn't be rendered.\n\n" + str(e),
+                    "FreeClimber",
+                    wx.OK | wx.ICON_WARNING,
+                )
+
+            # If we reached here without throwing, analysis completed
+            try:
+                proj_path = getattr(getattr(self, 'detector', None), 'path_project', None)
+                if proj_path is None:
+                    proj_path = self.input_project_path.GetValue()
+            except Exception:
+                proj_path = None
+
+            if proj_path:
+                wx.MessageBox("Full analysis complete.\n\nOutputs saved in:\n%s\n\nOpen the Results tab to view slopes + plot inside the app." % str(proj_path),
+                              "FreeClimber", wx.OK | wx.ICON_INFORMATION)
+            else:
+                wx.MessageBox("Full analysis complete. Outputs saved to the project folder.",
+                              "FreeClimber", wx.OK | wx.ICON_INFORMATION)
+
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            print(tb)
+            wx.MessageBox("Run failed.\n\n%s\n\n(See terminal for full traceback.)" % str(e),
+                          "FreeClimber", wx.OK | wx.ICON_ERROR)
+
+    def _find_output_paths(self, det):
+        """Return the most likely outputs (slopes + key diagnostic images).
+
+        The upstream pipeline has a few naming variations (e.g. base.slopes.csv vs slopes.csv
+        sitting in the project folder). This resolver first checks the expected "base.*" files,
+        then falls back to scanning the project folder for the newest matching outputs.
+        """
+        paths = {}
+
+        # 1) Try the canonical base prefix used by the pipeline
+        base = getattr(det, 'path_noext', None)
+        if base is None:
+            proj = getattr(det, 'path_project', None) or getattr(det, 'project_path', None)
+            name = getattr(det, 'name', None)
+            if proj and name:
+                base = os.path.join(str(proj), str(name))
+
+        if base:
+            candidates = {
+                "slopes": [base + ".slopes.csv", base + "_slopes.csv", base + "-slopes.csv", os.path.join(os.path.dirname(base), "slopes.csv")],
+                "raw": [base + ".raw.csv", base + "_raw.csv", base + "-raw.csv"],
+                "filter": [base + ".filter.csv", base + "_filter.csv", base + "-filter.csv", base + ".filtered.csv", base + "_filtered.csv"],
+                "diagnostic": [base + ".diagnostic.png", base + ".diag.png", os.path.join(os.path.dirname(base), "diagnostic.png")],
+                "frame0": [base + ".processed_frame0.png", base + "_processed_frame0.png"],
+                "finalframe": [base + ".processed_finalframe.png", base + "_processed_finalframe.png"],
+            }
+            for k, lst in candidates.items():
+                for p in lst:
+                    if p and os.path.exists(p):
+                        paths[k] = p
+                        break
+
+        # 2) Fallback: scan the project folder for the newest relevant outputs
+        proj_dir = None
+        try:
+            proj_dir = getattr(det, 'path_project', None) or getattr(det, 'project_path', None)
+        except Exception:
+            proj_dir = None
+        try:
+            if hasattr(self, 'input_project_path') and self.input_project_path is not None:
+                gui_proj = self.input_project_path.GetValue()
+                if gui_proj:
+                    proj_dir = gui_proj
+        except Exception:
+            pass
+
+        if proj_dir and os.path.isdir(proj_dir):
+            # newest slopes-like csv
+            if "slopes" not in paths:
+                slope_glob = sorted(glob.glob(os.path.join(proj_dir, "**", "*slopes*.csv"), recursive=True),
+                                   key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0,
+                                   reverse=True)
+                if slope_glob:
+                    paths["slopes"] = slope_glob[0]
+
+            # newest raw/filter per-frame CSVs (if exported)
+            if "raw" not in paths:
+                raw_glob = sorted(glob.glob(os.path.join(proj_dir, "**", "*raw*.csv"), recursive=True),
+                                  key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0,
+                                  reverse=True)
+                # avoid picking slopes/config as raw
+                raw_glob = [p for p in raw_glob if "slopes" not in os.path.basename(p).lower() and "config" not in os.path.basename(p).lower()]
+                if raw_glob:
+                    paths["raw"] = raw_glob[0]
+
+            if "filter" not in paths:
+                filt_glob = sorted(glob.glob(os.path.join(proj_dir, "**", "*filter*.csv"), recursive=True) +
+                                   glob.glob(os.path.join(proj_dir, "**", "*filtered*.csv"), recursive=True),
+                                   key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0,
+                                   reverse=True)
+                filt_glob = [p for p in filt_glob if "slopes" not in os.path.basename(p).lower() and "config" not in os.path.basename(p).lower()]
+                if filt_glob:
+                    paths["filter"] = filt_glob[0]
+
+            # newest diagnostic png
+            if "diagnostic" not in paths:
+                diag_glob = sorted(glob.glob(os.path.join(proj_dir, "**", "*diagnostic*.png"), recursive=True),
+                                  key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0,
+                                  reverse=True)
+                if diag_glob:
+                    paths["diagnostic"] = diag_glob[0]
+
+            # reference frames if present
+            if "frame0" not in paths:
+                f0_glob = sorted(glob.glob(os.path.join(proj_dir, "**", "*frame0*.png"), recursive=True),
+                                key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0,
+                                reverse=True)
+                if f0_glob:
+                    paths["frame0"] = f0_glob[0]
+            if "finalframe" not in paths:
+                ff_glob = sorted(glob.glob(os.path.join(proj_dir, "**", "*finalframe*.png"), recursive=True) +
+                                 glob.glob(os.path.join(proj_dir, "*final_frame*.png")),
+                                 key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0,
+                                 reverse=True)
+                if ff_glob:
+                    paths["finalframe"] = ff_glob[0]
+
+        return paths
+
+    def _load_positions_df(self, paths):
+        """Load per-frame fly positions from the filter/raw CSV if available.
+
+        Returns (df, frame_col, vial_col, x_col, y_col) or (None, None, None, None, None)
+        if the file/columns can't be inferred.
+        """
+        try:
+            import pandas as pd
+        except Exception:
+            return None, None, None, None, None
+
+        csv_path = paths.get("filter") or paths.get("raw")
+        if not csv_path or not os.path.exists(csv_path):
+            return None, None, None, None, None
+
+        try:
+            df = pd.read_csv(csv_path)
+        except Exception:
+            return None, None, None, None, None
+
+        # Infer likely columns
+        cols = {c.lower(): c for c in df.columns}
+
+        def pick(*cands):
+            for c in cands:
+                if c in cols:
+                    return cols[c]
+            return None
+
+        frame_col = pick("frame", "frames", "t", "time", "frame_idx")
+        vial_col = pick("vial", "vial_id", "vialid", "tube", "roi", "roi_id", "channel")
+
+        # x/y columns: prefer centroid naming, then generic x/y.
+        x_col = pick("x", "xpos", "x_pos", "x_position", "centroid_x", "cx")
+        y_col = pick("y", "ypos", "y_pos", "y_position", "centroid_y", "cy")
+
+        # If still missing, try any column that looks like x/y but avoid obvious non-position fields.
+        if x_col is None:
+            for c in df.columns:
+                cl = c.lower()
+                if "x" in cl and not any(bad in cl for bad in ["max", "min", "std", "err", "index"]):
+                    x_col = c
+                    break
+        if y_col is None:
+            for c in df.columns:
+                cl = c.lower()
+                if "y" in cl and not any(bad in cl for bad in ["max", "min", "std", "err", "index"]):
+                    y_col = c
+                    break
+
+        if frame_col is None or x_col is None or y_col is None:
+            return None, None, None, None, None
+
+        return df, frame_col, vial_col, x_col, y_col
+
+    def populate_results_tab(self):
+        """Load outputs (slopes + plots) into the Results tab."""
+        det = getattr(self, 'detector', None)
+        if det is None:
+            self.results_header.SetLabel("Results (no detector object yet)")
+            return
+
+        paths = self._find_output_paths(det)
+        import time
+
+        def _wait_for_file(p, tries=10, delay=0.2):
+            """Wait briefly for a file to appear/non-empty (helps right after analysis)."""
+            if p is None:
+                return None
+            for _ in range(tries):
+                try:
+                    if os.path.exists(p) and os.path.getsize(p) > 0:
+                        return p
+                except Exception:
+                    pass
+                time.sleep(delay)
+            return p
+
+        slopes_path = _wait_for_file(paths.get("slopes", None))
+        positions_path = _wait_for_file(paths.get("positions", None))
+        diag_img_path = _wait_for_file(paths.get("diagnostic", None))
+
+        # Header
+        proj_path = getattr(det, 'path_project', None)
+        if proj_path:
+            self.results_header.SetLabel(f"Results saved in: {proj_path}")
+        else:
+            self.results_header.SetLabel("Results")
+
+        # Clear table
+        self.slopes_table.ClearAll()
+
+        if slopes_path is None:
+            self.results_explain.SetValue(
+                "No slopes.csv found yet. Run analysis, then check the output folder."
+            )
+            for fig, canvas in [
+                (self.results_figure_speed, self.results_canvas_speed),
+                (self.results_figure_x, self.results_canvas_x),
+                (self.results_figure_y, self.results_canvas_y),
+            ]:
+                try:
+                    fig.clear()
+                    canvas.draw()
+                except Exception:
+                    pass
+            return
+
+        # Load slopes
+        try:
+            import pandas as pd  # local import so the app can still open if pandas isn't installed globally
+        except Exception as e:
+            self.results_explain.SetValue(
+                "Could not import pandas, which is required to display results.\n\n"
+                f"Error: {e}"
+            )
+            return
+
+        try:
+            df = pd.read_csv(slopes_path)
+        except Exception as e:
+            self.results_explain.SetValue(
+                "Found slopes.csv but could not read it.\n\n"
+                f"File: {slopes_path}\n"
+                f"Error: {e}"
+            )
+            return
+
+
+        explain_text = """How to read these results:
+
+• slopes.csv: one row per vial (and sometimes a summary row).
+  - slope: estimated climbing speed. Units depend on your settings (pixels/frame, or cm/sec if you enabled conversion).
+  - intercept: y-value at frame 0 for the fit (mainly QC).
+  - r_value: goodness-of-fit (closer to 1 = more linear climb).
+  - p_value / std_err: regression diagnostics.
+  - first_frame / last_frame: frame window used for the linear fit.
+
+Quick QC tips:
+• Near-zero slope can mean no climbing OR detection failed.
+• Low r_value often means noisy tracking (threshold too low/high, glare, crowded vials).
+"""
+        self.results_explain.SetValue(explain_text)
+
+        # Table columns
+        for i, col in enumerate(df.columns):
+            self.slopes_table.InsertColumn(i, col)
+
+        # Table rows
+        for row_i in range(len(df)):
+            self.slopes_table.InsertItem(row_i, str(df.iloc[row_i, 0]))
+            for col_i in range(1, len(df.columns)):
+                self.slopes_table.SetItem(row_i, col_i, str(df.iloc[row_i, col_i]))
+
+        # Auto-size columns (cap width)
+        for i in range(len(df.columns)):
+            self.slopes_table.SetColumnWidth(i, wx.LIST_AUTOSIZE_USEHEADER)
+            w = self.slopes_table.GetColumnWidth(i)
+            self.slopes_table.SetColumnWidth(i, min(max(w, 70), 220))
+
+        # Plot: try to find a slope/velocity column
+        # --- Plot 1: speed per vial (from slopes.csv)
+        self.results_figure_speed.clear()
+        ax = self.results_figure_speed.add_subplot(111)
+
+        # Pick a y column
+        ycol = None
+        for c in df.columns:
+            cl = c.lower()
+            if "slope" in cl or "velocity" in cl or "speed" in cl:
+                ycol = c
+                break
+        if ycol is None and len(df.columns) >= 2:
+            ycol = df.columns[1]
+
+        x = list(range(1, len(df) + 1))
+        try:
+            y = pd.to_numeric(df[ycol], errors="coerce").values
+        except Exception:
+            y = df[ycol].values
+
+        ax.plot(x, y, marker="o")
+        ax.set_title("Climbing speed by vial")
+        ax.set_xlabel("Vial")
+        ax.set_ylabel(str(ycol))
+        ax.grid(True, alpha=0.2)
+
+        self.results_canvas_speed.draw()
+
+        # --- Plot 2/3: mean horizontal/vertical position over time (from filter/raw.csv)
+        pos_df, frame_col, vial_col, x_col, y_col = self._load_positions_df(paths)
+        if pos_df is not None and frame_col and (x_col or y_col):
+            try:
+                import pandas as pd
+            except Exception:
+                pd = None
+
+            # Mean X over time (per vial)
+            self.results_figure_x.clear()
+            axx = self.results_figure_x.add_subplot(111)
+            if x_col:
+                grp = pos_df.groupby([frame_col, vial_col])[x_col].mean().reset_index()
+                for v in sorted(grp[vial_col].unique()):
+                    sub = grp[grp[vial_col] == v]
+                    axx.plot(sub[frame_col].values, sub[x_col].values, label=str(v))
+                axx.set_title("Mean horizontal position (x) over time")
+                axx.set_xlabel("Frame")
+                axx.set_ylabel(x_col)
+                axx.grid(True, alpha=0.2)
+                # Only show legend if manageable
+                if len(grp[vial_col].unique()) <= 12:
+                    axx.legend(loc="best", fontsize=7)
+            else:
+                axx.text(0.5, 0.5, "No x-position column found in filter/raw CSV", ha="center", va="center")
+                axx.set_axis_off()
+            self.results_canvas_x.draw()
+
+            # Mean Y over time (per vial)
+            self.results_figure_y.clear()
+            axy = self.results_figure_y.add_subplot(111)
+            if y_col:
+                grp = pos_df.groupby([frame_col, vial_col])[y_col].mean().reset_index()
+                for v in sorted(grp[vial_col].unique()):
+                    sub = grp[grp[vial_col] == v]
+                    axy.plot(sub[frame_col].values, sub[y_col].values, label=str(v))
+                axy.set_title("Mean vertical position (y) over time")
+                axy.set_xlabel("Frame")
+                axy.set_ylabel(y_col)
+                axy.grid(True, alpha=0.2)
+                if len(grp[vial_col].unique()) <= 12:
+                    axy.legend(loc="best", fontsize=7)
+            else:
+                axy.text(0.5, 0.5, "No y-position column found in filter/raw CSV", ha="center", va="center")
+                axy.set_axis_off()
+            self.results_canvas_y.draw()
+        else:
+            # If positions aren't available, clear the X/Y plots so the UI isn't confusing.
+            for fig, canvas in [
+                (self.results_figure_x, self.results_canvas_x),
+                (self.results_figure_y, self.results_canvas_y),
+            ]:
+                try:
+                    fig.clear()
+                    canvas.draw()
+                except Exception:
+                    pass
+
+        # Update explanation with plain-English labeling
+        self.results_explain.SetValue(
+            "How to read these outputs:\n"
+            "\n"
+            "Main result (slopes.csv)\n"
+            "• Each row = one vial (or one group, depending on naming).\n"
+            "• slope = climbing speed (in pixels/frame, or cm/sec if you enable Convert to cm/sec).\n"
+            "• r_value/p_value/std_err describe how well a straight line fit explains the climbing trajectory.\n"
+            "\n"
+            "Quality control (Diagnostics tab + X/Y plots)\n"
+            "• Mean Y vs time should generally increase if flies are climbing.\n"
+            "• Mean X vs time should stay roughly flat (large drifts suggest vial mixing or camera/ROI issues).\n"
+            "• If speed is near 0 and Y is flat, flies didn’t climb or detections failed."
+        )
+
+        # Force a relayout/refresh so the wx + matplotlib canvases reliably render
+        # on macOS (especially when switching tabs right after analysis).
+        try:
+            self.results_panel.Layout()
+            self.results_panel.SendSizeEvent()
+            self.results_panel.Refresh()
+        except Exception:
+            pass
+
+    def OnNotebookPageChanged(self, event):
+        """Refresh Results when the Results tab is selected."""
+        try:
+            idx = event.GetSelection()
+            try:
+                label = self.notebook.GetPageText(idx)
+            except Exception:
+                label = ""
+            if label.strip().lower() == "results":
+                self.populate_results_tab()
+        finally:
+            event.Skip()
 
     def set_config_file(self):
         '''Set path for the project folder'''
@@ -487,7 +1111,7 @@ class main_gui(wx.Frame):
         ######
         ## Inputs for ROI Rectangle
         self.panel1 = wx.Panel(id=wxID_panel_1, name='panel1',
-              parent=self, pos=wx.Point(0, 0), size=wx.Size(950, 231),
+              parent=self, pos=wx.Point(0, 0), size=wx.Size(950, 260),
               style=wx.TAB_TRAVERSAL)
        
         ## Step 1 boxes
@@ -734,12 +1358,45 @@ class main_gui(wx.Frame):
               size=wx.Size(350,22), style=0, value='') 
 
 
-        ## Bottom panels
-        self.text_video_path = wx.StaticText(id=wxID_video_path,
-              label='Video Path', name='text_video_path', parent=self.panel1,
-              pos=wx.Point(10, 205), size=wx.Size(930, 22), style=0)
-        self.text_video_path.SetBackgroundColour(wx.Colour(241, 241, 241))
 
+        ## Bottom bar: selected video + Run analysis (kept visible; never overlaps)
+        # NOTE: panel1 is now taller; place this bar lower so it can't collide with the button row.
+        # Give this bar enough height so the button and text never collide on macOS.
+        self.bottom_bar = wx.Panel(self.panel1, pos=wx.Point(10, 228), size=wx.Size(1480, 52))
+        # Match macOS dark appearance by inheriting the parent background
+        try:
+            self.bottom_bar.SetBackgroundColour(self.panel1.GetBackgroundColour())
+        except Exception:
+            pass
+
+        bottom_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Left: prominent Run analysis button (replaces the old white path bar)
+        self.btn_run_full = wx.Button(self.bottom_bar, wx.ID_ANY, "RUN ANALYSIS")
+        self.btn_run_full.SetMinSize(wx.Size(190, 34))
+        try:
+            f = self.btn_run_full.GetFont()
+            f.SetWeight(wx.FONTWEIGHT_BOLD)
+            self.btn_run_full.SetFont(f)
+        except Exception:
+            pass
+        self.btn_run_full.SetToolTip("Run full analysis and save outputs into the Project path folder")
+
+        # Right: short video filename (full path in tooltip)
+        self.video_path_label = wx.StaticText(self.bottom_bar, label="No video selected")
+        self.video_path_label.SetForegroundColour(wx.Colour(230, 230, 230))
+        self.video_path_label.SetToolTip("")
+
+        bottom_sizer.Add(self.btn_run_full, 0, wx.ALIGN_CENTER_VERTICAL | wx.ALL, 8)
+        bottom_sizer.AddStretchSpacer(1)
+        bottom_sizer.Add(self.video_path_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.ALL, 8)
+
+        # Force layout so sizers take effect even with absolute-position parent panel.
+        self.bottom_bar.SetSizer(bottom_sizer)
+        self.bottom_bar.Layout()
+
+        # Bind directly to the button (DO NOT bind by id=wx.ID_ANY; that can fire from other buttons)
+        self.btn_run_full.Bind(wx.EVT_BUTTON, self.OnButton_runFullButton)
         self.button_test_parameters = wx.Button(id=wxID_test_parameters,
               label=u'Test parameters', name=u'button_test_parameters',
               parent=self.panel1, pos=wx.Point(col1,180), size=wx.Size(140, 22),
@@ -759,6 +1416,9 @@ class main_gui(wx.Frame):
               style=wx.ALIGN_CENTER)
         self.button_store_parameters.Bind(wx.EVT_BUTTON, self.OnButton_strParButton,
               id=wxID_store_parameters)
+
+        # Run button moved into the bottom bar (see "Bottom bar" block above)
+
 
         ## Text box at the bottom
         self.status_bar = wx.StatusBar(id=wxID_status_bar,
@@ -876,7 +1536,7 @@ def check_args(args):
 [wxID_text_step_1a,wxID_text_step_1b,wxID_text_step_2,wxID_text_step_3,wxID_text_step_4,wxID_text_step_5,
 wxID_panel_1, wxID_text_title, 
 wxID_browse_video, wxID_reload_video, wxID_store_parameters,
-wxID_test_parameters, wxID_display_parameters,
+wxID_run_full_analysis, wxID_test_parameters, wxID_display_parameters,
 wxID_video_path, 
 wxID_frame_rate,
 wxID_status_bar, 
@@ -899,7 +1559,7 @@ wxID_check_box_outlier,wxID_outlier_TB,wxID_outlier_LR,
 wxID_text_naming_convention,wxID_input_naming_convention,
 wxID_text_vial_id_vars,wxID_input_vial_id_vars,
 wxID_text_path_project,wxID_input_path_project,
-wxID_input_convert_to_cm_sec,wxID_check_box_ROI] = [wx.ID_ANY for item in range(60)] 
+wxID_input_convert_to_cm_sec,wxID_check_box_ROI] = [wx.ID_ANY for item in range(61)] 
 
 
 ## Basic GUI sizes and spacers
