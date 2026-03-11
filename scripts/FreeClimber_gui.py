@@ -7,7 +7,7 @@
 ## Purpose   : Graphical User Interface wrapper for FreeClimber
 
 ## Version number
-version = '0.4.0'
+version = '2.0.0'
 doi =  'https://doi.org/10.1242/jeb.229377' ## Link to published paper
 
 ## More universal modules
@@ -212,7 +212,7 @@ QC tips:
         ## Enable all buttons
         button_list = ['browse_video','reload_video','test_parameters','store_parameters']
         for button in button_list:
-            exec('self.button_' + button + '.Enable(True)')
+            getattr(self, 'button_' + button).Enable(True)
 
         ## Load video
         self.load_video()
@@ -426,8 +426,8 @@ QC tips:
                 
                 ## If the fixed_ROI box is checked, handle values differently
                 if self.checkBox_fixed_ROI.GetValue():
-                    self.x1 = self.x0 + int(eval(self.input_w.GetValue()))
-                    self.y1 = self.y0 + int(eval(self.input_h.GetValue()))
+                    self.x1 = self.x0 + int(float(self.input_w.GetValue()))
+                    self.y1 = self.y0 + int(float(self.input_h.GetValue()))
                     self.rect.set_width(self.x1 - self.x0)
                     self.rect.set_height(self.y1 - self.y0)
                     self.rect.set_xy((self.x0, self.y0))
@@ -1461,16 +1461,18 @@ def startup():
     line_length = 72
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    line0 = '#'*line_length
-    line1 = '## FreeClimber v.%s ' % str(version)
-    line2 = '## Please cite: %s ' % doi
-    line3 = "## Beginning program @ %s " % str(now)
-    line4 = line0
+    lines = [
+        '#'*line_length,
+        '## FreeClimber v.%s ' % str(version),
+        '## Please cite: %s ' % doi,
+        "## Beginning program @ %s " % str(now),
+        '#'*line_length,
+    ]
 
     ## Printing formated lines
     print('\n')
-    for item in range(5):
-        print_line(eval('line'+str(item)),line_length)
+    for line in lines:
+        print_line(line, line_length)
 
     args = define_argument_parser()
     return args

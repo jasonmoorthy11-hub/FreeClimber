@@ -8,7 +8,7 @@
 
 
 ## Version number
-version='0.4.0'
+version = '2.0.0'
 doi =  'https://doi.org/10.1242/jeb.229377' ## Link to published paper
 
 ## Importing external package(s)
@@ -24,6 +24,7 @@ from matplotlib.cm import Greys_r
 
 ## Importing local module(s)
 import detector as detector
+from config import load_config, apply_config
 
 class FreeClimber(object):
     def __init__(self, config_file):
@@ -46,19 +47,9 @@ class FreeClimber(object):
         '''Loads parameters for the FreeClimber object'''
         if self.args.debug: print('FreeClimber.load_parameters')
         
-        ## Read in parameters from configuration file
-        var_list = []
-        with open(self.config_file,'r') as f:
-            variables = f.readlines()#.split('\n')
-        f.close()
-
-        ## Filter lines with '#', ' ', and carriage returns
-        variables = [item.rstrip() for item in variables if not item.startswith(('#',' ','\n'))]
-        
-        ## Assign variables to the detector, pass if unable to.
-        for item in variables:
-            try: exec('self.'+item)
-            except: pass
+        ## Read in parameters safely from configuration file
+        params = load_config(self.config_file)
+        apply_config(self, params)
         return
 
     ## Reading file with video paths for --process_custom argument
@@ -427,16 +418,18 @@ def startup():
         return
 
     ## Lines to print
-    line0 = '#'*line_length
-    line1 = '## FreeClimber v.%s ' % str(version)
-    line2 = '## Please cite: %s' % doi
-    line3 = "## Beginning program @ %s " % str(now)
-    line4 = line0
-    
+    lines = [
+        '#'*line_length,
+        '## FreeClimber v.%s ' % str(version),
+        '## Please cite: %s' % doi,
+        "## Beginning program @ %s " % str(now),
+        '#'*line_length,
+    ]
+
     ## Printing formated lines
     print('\n')
-    for item in range(5):
-        print_line(eval('line'+str(item)),line_length)
+    for line in lines:
+        print_line(line, line_length)
     return         
 
 def main():

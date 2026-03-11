@@ -6,7 +6,7 @@
 ## Date      : December 2020
 ## Purpose   : Script contains main functions used in FreeClimber package, as well as added functionality
 
-version = '0.4.0'
+version = '2.0.0'
 publication = False
 
 import os
@@ -24,6 +24,8 @@ from scipy.signal import find_peaks,peak_prominences
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.lines import Line2D
+
+from config import parse_variable_list, apply_config, load_config
 
 ## Issue with 'SettingWithCopyWarning' in step_3
 pd.options.mode.chained_assignment = None  # default='warn'
@@ -94,13 +96,12 @@ class detector(object):
             print('\n\nExiting program. No variable list loaded')
             raise SystemExit
         
-        ## Pass imported variables to the detector object 
+        ## Pass imported variables to the detector object (safe parsing)
         if self.debug: print('detector.load_for_gui: --------variables--------')
-        for item in variables:
-            if self.debug: print('detector.load_for_gui:',item)
-            if ~item.startswith(('\s','\t','\n')):
-                try: exec('self.'+item)
-                except: print('detector.load_for_gui: !! Could not import ( %s )' % item) 
+        params = parse_variable_list(variables)
+        for key, value in params.items():
+            if self.debug: print(f'detector.load_for_gui: {key}={value}')
+        apply_config(self, params)
         return     
         
     def load_for_main(self, config_file = None):
@@ -116,26 +117,20 @@ class detector(object):
         
         ## Read in lines from configuration (.cfg) file
         try:
-            with open(config_file,'r') as f:
-                variables = f.readlines()
-            f.close()
-            
-            ## Filter, format, and import variables to detector object
+            ## Safe config loading
             if self.debug: print('detector.load_for_main:  --------variables--------')
-            variables = [item.rstrip() for item in variables if not item.startswith(('#','\s','\t','\n'))]
-
-            for item in variables:
-                if self.debug: print('detector.load_for_main:',item)
-                if ~item.startswith(('\s','\t','\n')):
-                    try: exec('self.'+item)
-                    except: print('detector.load_for_main: !! Could not import ( %s )' % item) 
+            params = load_config(config_file)
+            for key, value in params.items():
+                if self.debug: print(f'detector.load_for_main: {key}={value}')
+            apply_config(self, params)
             return
 
-        ## Exit program if issue with the configuration file
-        except: 
-            print('\n\nExiting program. Could not read in file.cfg, but path and suffix are good--likely a formatting issue')
+        except FileNotFoundError:
+            print('\n\nExiting program. Config file not found:', config_file)
             raise SystemExit
-        return
+        except Exception as e:
+            print('\n\nExiting program. Could not read in file.cfg:', e)
+            raise SystemExit
 
     ## Checking video path is valid
     def check_video(self,video_file=None):
@@ -175,11 +170,10 @@ class detector(object):
         file_names = ['data','filtered','diagnostic','slope']
         file_suffixes = ['.raw.csv','.filtered.csv','.diagnostic.png','.slopes.csv']
         for item,jtem in zip(file_names,file_suffixes):
-            var_name = 'self.path_'+item
+            attr_name = 'path_'+item
             file_path = ''.join([self.name_nosuffix,jtem])
-            if self.debug: print('detector.specify_paths_details: ' + var_name+"='"+file_path+"'")
-            file_path = file_path.replace("\\", "\\\\")
-            exec(var_name+"='"+file_path+"'")
+            if self.debug: print(f'detector.specify_paths_details: self.{attr_name}={file_path!r}')
+            setattr(self, attr_name, file_path)
 
         ## Project folder specific paths
         if self.path_project == None: self.path_project = os.path.join(folder,self.name + '.cfg')
