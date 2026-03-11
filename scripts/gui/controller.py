@@ -4,6 +4,7 @@ All analysis calls go through this controller so that the GUI never touches
 detector internals directly.  Threading is handled here — the GUI just provides
 a progress callback.
 """
+from __future__ import annotations
 
 import os
 import sys
@@ -191,14 +192,21 @@ class AnalysisController:
     # ------------------------------------------------------------------
     PROFILES_DIR = os.path.expanduser('~/.freeclimber/profiles')
 
+    @staticmethod
+    def _validate_profile_name(name: str):
+        if not name or '/' in name or '\\' in name or '..' in name:
+            raise ValueError(f"Invalid profile name: {name!r}")
+
     def save_profile(self, name: str, params: dict):
         """Save params as a named profile."""
+        self._validate_profile_name(name)
         from config import save_config
         os.makedirs(self.PROFILES_DIR, exist_ok=True)
         save_config(os.path.join(self.PROFILES_DIR, f'{name}.cfg'), params)
 
     def load_profile(self, name: str) -> dict:
         """Load a named profile."""
+        self._validate_profile_name(name)
         from config import load_config
         path = os.path.join(self.PROFILES_DIR, f'{name}.cfg')
         params = load_config(path)
@@ -214,6 +222,7 @@ class AnalysisController:
         )
 
     def delete_profile(self, name: str):
+        self._validate_profile_name(name)
         path = os.path.join(self.PROFILES_DIR, f'{name}.cfg')
         if os.path.exists(path):
             os.remove(path)

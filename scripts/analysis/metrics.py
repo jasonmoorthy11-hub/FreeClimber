@@ -78,11 +78,12 @@ def compute_per_fly_metrics(df: pd.DataFrame, frame_rate: int = 30,
         total_possible = track.frame.max() - track.frame.min() + 1
         completeness = n_frames / total_possible if total_possible > 0 else 0.0
 
-        # AUC: area under climbing curve (y-position vs time)
+        # AUC: area under climb displacement curve (upward movement from start)
         time_vals = track.frame.values.astype(float)
         if convert_to_cm_sec:
             time_vals = time_vals / frame_rate
-        y_vals = track.y.values.astype(float)
+        # Displacement from starting position (positive = upward in video coords where y=0 is top)
+        y_vals = (track.y.values[0] - track.y.values).astype(float)
         if convert_to_cm_sec:
             y_vals = y_vals / pixel_to_cm
         auc = float(np.trapz(y_vals, time_vals)) if len(time_vals) > 1 else 0.0

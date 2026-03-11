@@ -3,6 +3,7 @@
 PDF: Jinja2 template -> HTML -> WeasyPrint PDF
 HTML: Plotly interactive standalone page
 """
+from __future__ import annotations
 
 import os
 import logging

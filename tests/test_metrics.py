@@ -37,7 +37,18 @@ class TestPerFlyMetrics:
     def test_auc_computed(self, sample_tracking_df):
         result = compute_per_fly_metrics(sample_tracking_df)
         assert 'auc' in result.columns
-        assert (result.auc > 0).all()
+
+    def test_auc_displacement_based(self):
+        """A climbing fly should have higher AUC than a stationary fly."""
+        rows_climb = [{'particle': 0, 'frame': f, 'x': 100, 'y': 100 - f * 2, 'vial': 1}
+                      for f in range(50)]
+        rows_still = [{'particle': 1, 'frame': f, 'x': 200, 'y': 100, 'vial': 1}
+                      for f in range(50)]
+        df = pd.DataFrame(rows_climb + rows_still)
+        result = compute_per_fly_metrics(df)
+        climber = result[result.particle == 0].iloc[0]
+        sitter = result[result.particle == 1].iloc[0]
+        assert climber.auc > sitter.auc
 
 
 class TestPopulationMetrics:

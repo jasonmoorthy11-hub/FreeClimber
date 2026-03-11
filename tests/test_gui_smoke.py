@@ -36,6 +36,26 @@ class TestController:
             ctrl.export_results('csv', '/tmp/test.csv')
 
 
+class TestExportDispatch:
+    def test_export_csv_with_slopes(self, sample_slopes_df, tmp_path):
+        from gui.controller import AnalysisController
+        ctrl = AnalysisController()
+        ctrl.slopes_df = sample_slopes_df
+        out = str(tmp_path / 'test.csv')
+        ctrl.export_results('csv', out)
+        import pandas as pd
+        df = pd.read_csv(out)
+        assert len(df) == len(sample_slopes_df)
+
+    def test_export_unknown_format_raises(self, sample_slopes_df):
+        from gui.controller import AnalysisController
+        ctrl = AnalysisController()
+        ctrl.slopes_df = sample_slopes_df
+        import pytest as pt
+        with pt.raises(ValueError):
+            ctrl.export_results('unknown', '/tmp/test.csv')
+
+
 class TestGUIImport:
     def test_app_module_imports(self):
         """Verify the GUI app module can be imported without starting tkinter."""

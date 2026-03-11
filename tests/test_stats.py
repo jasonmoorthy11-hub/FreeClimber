@@ -162,3 +162,8 @@ class TestDunnett:
     def test_invalid_control(self, three_groups):
         with pytest.raises(ValueError):
             dunnett_vs_control(three_groups, control_name='nonexistent')
+
+    def test_only_control_group(self):
+        groups = {'control': np.array([1, 2, 3, 4, 5])}
+        result = dunnett_vs_control(groups, control_name='control')
+        assert result == []

@@ -431,6 +431,7 @@ class FreeClimberApp(ctk.CTk):
     def _build_results_tab(self):
         tab = self.tabview.add("Results")
         tab.grid_rowconfigure(1, weight=1)
+        tab.grid_rowconfigure(2, weight=1)
         tab.grid_columnconfigure(0, weight=1)
 
         # Explanation text
@@ -800,17 +801,12 @@ class FreeClimberApp(ctk.CTk):
         self.diag_fig.clear()
         axes = [self.diag_fig.add_subplot(2, 3, i + 1) for i in range(6)]
 
-        def on_done(result):
-            self.after(0, lambda: self._on_analysis_done(result))
-
-        def _worker():
-            try:
-                result = self.controller.test_parameters(params, axes)
-                on_done(result)
-            except Exception as e:
-                on_done(e)
-
-        threading.Thread(target=_worker, daemon=True).start()
+        try:
+            self.update_idletasks()
+            result = self.controller.test_parameters(params, axes)
+        except Exception as e:
+            result = e
+        self._on_analysis_done(result)
 
     def _on_analysis_done(self, result):
         self.run_btn.configure(state="normal", text="RUN ANALYSIS")
@@ -1172,7 +1168,7 @@ class FreeClimberApp(ctk.CTk):
         name = ctk.CTkInputDialog(text="Profile name:", title="Save Profile").get_input()
         if not name:
             return
-        params = self._gather_params()
+        params = self._collect_params()
         self.controller.save_profile(name, params)
         self._refresh_profiles()
         self.status_var.set(f"Profile saved: {name}")
@@ -1204,7 +1200,7 @@ class FreeClimberApp(ctk.CTk):
         if not paths:
             return
 
-        params = self._gather_params()
+        params = self._collect_params()
         self.run_btn.configure(state="disabled")
         self.status_var.set(f"Batch: 0/{len(paths)} videos...")
         self.progress_bar.set(0)
@@ -1230,7 +1226,7 @@ class FreeClimberApp(ctk.CTk):
         self.run_btn.configure(state="normal")
         self.progress_bar.set(1)
         if combined is not None and len(combined) > 0:
-            self._populate_slopes_table(combined)
+            self._populate_results(combined)
             self.tabview.set("Results")
             self.status_var.set(f"Batch complete: {len(combined)} rows")
         else:
@@ -1245,7 +1241,7 @@ class FreeClimberApp(ctk.CTk):
     # ------------------------------------------------------------------
     def _copy_methods(self):
         from output.reports import generate_methods_paragraph
-        params = self._gather_params()
+        params = self._collect_params()
         text = generate_methods_paragraph(params)
         self.clipboard_clear()
         self.clipboard_append(text)
@@ -1279,7 +1275,7 @@ class FreeClimberApp(ctk.CTk):
     def _on_drop(self, event):
         path = event.data.strip('{}')
         if os.path.isfile(path):
-            self._load_video_file(path)
+            self._open_video(path)
 
     # ------------------------------------------------------------------
     # First-run tutorial

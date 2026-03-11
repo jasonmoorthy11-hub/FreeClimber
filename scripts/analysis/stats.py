@@ -333,6 +333,9 @@ def dunnett_vs_control(groups: dict, control_name: str) -> list:
     control = control[~np.isnan(control)]
 
     treatment_names = [k for k in groups if k != control_name]
+    if not treatment_names:
+        return []
+
     treatment_arrays = []
     for name in treatment_names:
         arr = np.asarray(groups[name], dtype=float)
