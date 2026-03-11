@@ -13,7 +13,7 @@ import argparse
 from datetime import datetime
 
 ## FreeClimber version
-version = '0.3.1'
+version = '2.0.0'
 
 def define_argument_parser():
     '''Defines arguments to be parsed, via argparse module.
