@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 from analysis.stats import (
     check_normality, compare_two_groups, compare_multiple_groups,
     cohens_d, confidence_interval, publication_stats_table,
+    correct_pvalues, dunnett_vs_control,
 )
 
 
@@ -117,3 +118,47 @@ class TestPublicationTable:
     def test_three_groups(self, three_groups):
         table = publication_stats_table(three_groups)
         assert len(table) == 3
+
+
+class TestPValueCorrections:
+    def test_holm_bonferroni(self):
+        pvals = [0.01, 0.04, 0.03, 0.005]
+        adjusted = correct_pvalues(pvals, method='holm')
+        assert len(adjusted) == 4
+        # All adjusted values >= raw values
+        for raw, adj in zip(pvals, adjusted):
+            assert adj >= raw
+        # All <= 1.0
+        assert all(p <= 1.0 for p in adjusted)
+
+    def test_benjamini_hochberg(self):
+        pvals = [0.01, 0.04, 0.03, 0.005]
+        adjusted = correct_pvalues(pvals, method='bh')
+        assert len(adjusted) == 4
+        assert all(p <= 1.0 for p in adjusted)
+        # Smallest raw p should remain significant
+        assert adjusted[3] < 0.05
+
+    def test_holm_with_all_significant(self):
+        pvals = [0.001, 0.002, 0.003]
+        adjusted = correct_pvalues(pvals, method='holm')
+        assert all(p < 0.05 for p in adjusted)
+
+    def test_empty_pvalues(self):
+        assert correct_pvalues([], method='holm') == []
+        assert correct_pvalues([], method='bh') == []
+
+
+class TestDunnett:
+    def test_dunnett_vs_control(self, three_groups):
+        result = dunnett_vs_control(three_groups, control_name='wildtype')
+        assert len(result) == 2
+        for comp in result:
+            assert comp['vs_control'] == 'wildtype'
+            assert 'p_value' in comp
+            assert 'effect_size_d' in comp
+            assert 'significance' in comp
+
+    def test_invalid_control(self, three_groups):
+        with pytest.raises(ValueError):
+            dunnett_vs_control(three_groups, control_name='nonexistent')

@@ -86,7 +86,6 @@ def compare_multiple_groups(groups: dict, normal: bool = None, alpha: float = 0.
     Returns:
         dict with omnibus test, post_hoc comparisons, effect sizes
     """
-    group_names = list(groups.keys())
     arrays = [np.asarray(v, dtype=float) for v in groups.values()]
     arrays = [a[~np.isnan(a)] for a in arrays]
 
@@ -277,6 +276,91 @@ def _significance_label(p: float) -> str:
         return '*'
     else:
         return 'ns'
+
+
+def correct_pvalues(pvalues: list, method: str = 'holm') -> list:
+    """Apply multiple testing correction.
+
+    Args:
+        pvalues: list of raw p-values
+        method: 'holm' (Holm-Bonferroni) or 'bh' (Benjamini-Hochberg)
+
+    Returns:
+        list of adjusted p-values
+    """
+    n = len(pvalues)
+    if n == 0:
+        return []
+
+    indexed = sorted(enumerate(pvalues), key=lambda x: x[1])
+    adjusted = [0.0] * n
+
+    if method == 'holm':
+        for rank, (orig_idx, p) in enumerate(indexed):
+            adjusted[orig_idx] = min(p * (n - rank), 1.0)
+        # enforce monotonicity
+        running_max = 0.0
+        for _rank, (orig_idx, _) in enumerate(indexed):
+            running_max = max(running_max, adjusted[orig_idx])
+            adjusted[orig_idx] = running_max
+    elif method == 'bh':
+        for rank, (orig_idx, p) in enumerate(indexed):
+            adjusted[orig_idx] = min(p * n / (rank + 1), 1.0)
+        # enforce monotonicity (reverse direction)
+        running_min = 1.0
+        for rank in range(n - 1, -1, -1):
+            orig_idx = indexed[rank][0]
+            running_min = min(running_min, adjusted[orig_idx])
+            adjusted[orig_idx] = running_min
+    else:
+        raise ValueError(f"Unknown method: {method}. Use 'holm' or 'bh'.")
+
+    return adjusted
+
+
+def dunnett_vs_control(groups: dict, control_name: str) -> list:
+    """Dunnett's test: compare each group against a control group.
+
+    Requires scipy >= 1.12 for scipy.stats.dunnett.
+
+    Returns:
+        list of dicts with group, p_value, significance, effect_size_d
+    """
+    if control_name not in groups:
+        raise ValueError(f"Control group '{control_name}' not in groups")
+
+    control = np.asarray(groups[control_name], dtype=float)
+    control = control[~np.isnan(control)]
+
+    treatment_names = [k for k in groups if k != control_name]
+    treatment_arrays = []
+    for name in treatment_names:
+        arr = np.asarray(groups[name], dtype=float)
+        treatment_arrays.append(arr[~np.isnan(arr)])
+
+    try:
+        result = stats.dunnett(*treatment_arrays, control=control)
+        pvalues = result.pvalue
+    except AttributeError:
+        # scipy < 1.12 fallback: pairwise t-tests with Bonferroni
+        pvalues = []
+        for arr in treatment_arrays:
+            _, p = stats.ttest_ind(arr, control)
+            pvalues.append(min(p * len(treatment_arrays), 1.0))
+
+    comparisons = []
+    for i, name in enumerate(treatment_names):
+        p = float(pvalues[i])
+        d = cohens_d(treatment_arrays[i], control)
+        comparisons.append({
+            'group': name,
+            'vs_control': control_name,
+            'p_value': round(p, 6),
+            'effect_size_d': round(d, 4),
+            'significance': _significance_label(p),
+        })
+
+    return comparisons
 
 
 def publication_stats_table(groups: dict, metric_name: str = 'slope') -> pd.DataFrame:

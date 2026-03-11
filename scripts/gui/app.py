@@ -5,12 +5,16 @@ Designed for non-technical lab members: sliders, tooltips, drag-and-drop,
 dark mode, progressive disclosure.
 """
 
+import logging
 import os
 import sys
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox
 from datetime import datetime
+from tkinter import filedialog, messagebox
+
+# Bootstrap sys.path so bare imports work from any launch location
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 import customtkinter as ctk
 import numpy as np
@@ -21,7 +25,6 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 
-# Local imports — scripts/ is on sys.path
 from gui.controller import AnalysisController
 
 ctk.set_appearance_mode("dark")
@@ -335,6 +338,20 @@ class FreeClimberApp(ctk.CTk):
         self.project_entry = ctk.CTkEntry(proj_frame, width=160)
         self.project_entry.pack(side="left", padx=4)
 
+        # --- PROFILES section ---
+        ctk.CTkLabel(sidebar, text="PROFILES", font=("Helvetica", 13, "bold")).pack(anchor="w", padx=8, pady=(12, 2))
+        prof_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        prof_frame.pack(fill="x", padx=8, pady=1)
+        self.profile_var = ctk.StringVar(value="")
+        self.profile_menu = ctk.CTkOptionMenu(prof_frame, variable=self.profile_var, width=150,
+                                               values=self.controller.list_profiles() or ["(none)"],
+                                               command=self._on_profile_selected)
+        self.profile_menu.pack(side="left", padx=(0, 4))
+        ctk.CTkButton(prof_frame, text="Save", width=60, fg_color="#555555",
+                       command=self._save_profile).pack(side="left", padx=(0, 2))
+        ctk.CTkButton(prof_frame, text="Del", width=40, fg_color="#555555",
+                       command=self._delete_profile).pack(side="left")
+
         # --- ACTION BUTTONS ---
         ctk.CTkFrame(sidebar, height=2, fg_color="#444444").pack(fill="x", padx=8, pady=8)
         btn_actions = ctk.CTkFrame(sidebar, fg_color="transparent")
@@ -343,6 +360,13 @@ class FreeClimberApp(ctk.CTk):
                        command=self._test_parameters).pack(side="left", padx=(0, 4))
         ctk.CTkButton(btn_actions, text="Save Config", width=100, fg_color="#555555",
                        command=self._save_config).pack(side="left")
+
+        btn_actions2 = ctk.CTkFrame(sidebar, fg_color="transparent")
+        btn_actions2.pack(fill="x", padx=8, pady=2)
+        ctk.CTkButton(btn_actions2, text="Batch Mode", width=140, fg_color="#555555",
+                       command=self._batch_mode).pack(side="left", padx=(0, 4))
+        ctk.CTkButton(btn_actions2, text="Copy Methods", width=100, fg_color="#555555",
+                       command=self._copy_methods).pack(side="left")
 
         self.run_btn = ctk.CTkButton(sidebar, text="RUN ANALYSIS", height=40,
                                       font=("Helvetica", 15, "bold"),
@@ -1131,9 +1155,185 @@ class FreeClimberApp(ctk.CTk):
                             "doi: 10.1242/jeb.229377\n\n"
                             "Upgraded by Jason Moorthy, Wayne State University")
 
+    # ------------------------------------------------------------------
+    # Config profiles
+    # ------------------------------------------------------------------
+    def _on_profile_selected(self, name):
+        if name == "(none)":
+            return
+        try:
+            params = self.controller.load_profile(name)
+            self._apply_params_to_gui(params)
+            self.status_var.set(f"Profile loaded: {name}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not load profile:\n\n{e}")
+
+    def _save_profile(self):
+        name = ctk.CTkInputDialog(text="Profile name:", title="Save Profile").get_input()
+        if not name:
+            return
+        params = self._gather_params()
+        self.controller.save_profile(name, params)
+        self._refresh_profiles()
+        self.status_var.set(f"Profile saved: {name}")
+
+    def _delete_profile(self):
+        name = self.profile_var.get()
+        if name and name != "(none)":
+            self.controller.delete_profile(name)
+            self._refresh_profiles()
+            self.status_var.set(f"Profile deleted: {name}")
+
+    def _refresh_profiles(self):
+        profiles = self.controller.list_profiles() or ["(none)"]
+        self.profile_menu.configure(values=profiles)
+        if profiles:
+            self.profile_var.set(profiles[0])
+
+    # ------------------------------------------------------------------
+    # Batch mode
+    # ------------------------------------------------------------------
+    def _batch_mode(self):
+        paths = filedialog.askopenfilenames(
+            title="Select Videos for Batch Processing",
+            filetypes=[
+                ("Video files", "*.h264 *.mp4 *.avi *.mov"),
+                ("All files", "*.*"),
+            ],
+        )
+        if not paths:
+            return
+
+        params = self._gather_params()
+        self.run_btn.configure(state="disabled")
+        self.status_var.set(f"Batch: 0/{len(paths)} videos...")
+        self.progress_bar.set(0)
+
+        def progress(i, total, path, status):
+            self.after(0, lambda: self._batch_progress(i, total, path, status))
+
+        def worker():
+            try:
+                combined = self.controller.run_batch(list(paths), params, progress_callback=progress)
+                self.after(0, lambda c=combined: self._batch_done(c))
+            except Exception as ex:
+                self.after(0, lambda msg=str(ex): self._batch_error(msg))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _batch_progress(self, i, total, path, status):
+        self.progress_bar.set(i / total)
+        self.progress_label.configure(text=f"Video {i}/{total} — {os.path.basename(path)}")
+        self.status_var.set(f"Batch: {i}/{total} — {status}")
+
+    def _batch_done(self, combined):
+        self.run_btn.configure(state="normal")
+        self.progress_bar.set(1)
+        if combined is not None and len(combined) > 0:
+            self._populate_slopes_table(combined)
+            self.tabview.set("Results")
+            self.status_var.set(f"Batch complete: {len(combined)} rows")
+        else:
+            self.status_var.set("Batch complete: no results")
+
+    def _batch_error(self, msg):
+        self.run_btn.configure(state="normal")
+        messagebox.showerror("Batch Error", msg)
+
+    # ------------------------------------------------------------------
+    # Methods paragraph
+    # ------------------------------------------------------------------
+    def _copy_methods(self):
+        from output.reports import generate_methods_paragraph
+        params = self._gather_params()
+        text = generate_methods_paragraph(params)
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.status_var.set("Methods paragraph copied to clipboard")
+
+    # ------------------------------------------------------------------
+    # Log viewer
+    # ------------------------------------------------------------------
+    def _build_log_viewer(self):
+        self.log_frame = ctk.CTkFrame(self, height=120)
+        self.log_frame.pack(side="bottom", fill="x", padx=8, pady=(0, 4), before=self.status_bar)
+        self.log_text = ctk.CTkTextbox(self.log_frame, height=100, font=("Courier", 10),
+                                        state="disabled", wrap="word")
+        self.log_text.pack(fill="both", expand=True, padx=4, pady=4)
+
+        handler = _TextboxHandler(self.log_text, self)
+        logging.getLogger().addHandler(handler)
+        handler.setLevel(logging.INFO)
+
+    # ------------------------------------------------------------------
+    # Drag and drop
+    # ------------------------------------------------------------------
+    def _setup_drag_drop(self):
+        try:
+            from tkinterdnd2 import DND_FILES
+            self.drop_target_register(DND_FILES)
+            self.dnd_bind('<<Drop>>', self._on_drop)
+        except ImportError:
+            pass
+
+    def _on_drop(self, event):
+        path = event.data.strip('{}')
+        if os.path.isfile(path):
+            self._load_video_file(path)
+
+    # ------------------------------------------------------------------
+    # First-run tutorial
+    # ------------------------------------------------------------------
+    def _check_first_run(self):
+        marker = os.path.expanduser('~/.freeclimber/first_run')
+        if os.path.exists(marker):
+            return
+        os.makedirs(os.path.dirname(marker), exist_ok=True)
+
+        steps = [
+            "Step 1: Load a Video\n\nClick 'Open Video' or drag a .h264/.mp4 file\nonto the window.",
+            "Step 2: Adjust Parameters\n\nTweak detection settings in the sidebar.\nClick 'Test Parameters' to preview.",
+            "Step 3: Click Run\n\nHit 'RUN ANALYSIS' to process.\nResults appear in the Results tab.",
+        ]
+        for i, text in enumerate(steps):
+            win = ctk.CTkToplevel(self)
+            win.title(f"Welcome ({i+1}/3)")
+            win.geometry("400x200")
+            win.transient(self)
+            ctk.CTkLabel(win, text=text, font=("Helvetica", 13), wraplength=360,
+                          justify="center").pack(expand=True, padx=20, pady=20)
+            btn_text = "Next" if i < 2 else "Get Started!"
+            ctk.CTkButton(win, text=btn_text, command=win.destroy).pack(pady=(0, 16))
+            win.grab_set()
+            win.wait_window()
+
+        with open(marker, 'w') as f:
+            f.write('done')
+
+
+class _TextboxHandler(logging.Handler):
+    """Logging handler that writes to a CTkTextbox."""
+    def __init__(self, textbox, app):
+        super().__init__()
+        self.textbox = textbox
+        self.app = app
+
+    def emit(self, record):
+        msg = self.format(record) + '\n'
+        self.app.after(0, self._append, msg)
+
+    def _append(self, msg):
+        self.textbox.configure(state="normal")
+        self.textbox.insert("end", msg)
+        self.textbox.see("end")
+        self.textbox.configure(state="disabled")
+
 
 def main():
     app = FreeClimberApp()
+    app._build_log_viewer()
+    app._setup_drag_drop()
+    app._check_first_run()
     app.mainloop()
 
 

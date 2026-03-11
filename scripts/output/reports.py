@@ -78,6 +78,8 @@ def generate_pdf_report(
         for k, v in sorted(params.items()):
             params_lines.append(f"{k} = {v}")
 
+    methods_text = generate_methods_paragraph(params) if params else ''
+
     html_content = _PDF_TEMPLATE.render(
         experiment_name=experiment_name or 'FreeClimber Analysis',
         date=datetime.now().strftime('%Y-%m-%d %H:%M'),
@@ -86,6 +88,7 @@ def generate_pdf_report(
         fig_images=fig_images,
         stats_lines=stats_lines,
         params_lines=params_lines,
+        methods_text=methods_text,
         n_vials=len(slopes_df),
     )
 
@@ -240,6 +243,13 @@ _PDF_TEMPLATE_STR = """
     </div>
     {% endif %}
 
+    {% if methods_text %}
+    <h2>Methods</h2>
+    <div class="stats">
+        {{ methods_text }}
+    </div>
+    {% endif %}
+
     {% if params_lines %}
     <h2>Parameters</h2>
     <div class="params">
@@ -262,3 +272,34 @@ try:
     _PDF_TEMPLATE = Template(_PDF_TEMPLATE_STR)
 except ImportError:
     _PDF_TEMPLATE = None
+
+
+def generate_methods_paragraph(params: dict) -> str:
+    """Auto-generate a publication-ready methods paragraph from config parameters."""
+    vials = params.get('vials', '?')
+    diameter = params.get('diameter', '?')
+    minmass = params.get('minmass', '?')
+    window = params.get('window', '?')
+    frame_rate = params.get('frame_rate', '?')
+    pixel_to_cm = params.get('pixel_to_cm', '?')
+    bg = params.get('background_method', 'temporal_median')
+    tracking = 'with individual fly tracking' if params.get('individual_tracking') else 'without individual fly tracking'
+
+    threshold = params.get('threshold', 'auto')
+    threshold_desc = "Otsu's method" if threshold == 'auto' else f"a fixed threshold of {threshold}"
+
+    crop_0 = params.get('crop_0', '?')
+    crop_n = params.get('crop_n', '?')
+
+    text = (
+        f"Climbing velocity was measured using FreeClimber v2.0 (Spierer et al., 2021). "
+        f"Videos were recorded at {frame_rate} fps and analyzed from frame {crop_0} to {crop_n}. "
+        f"Background subtraction was performed using the {bg} method. "
+        f"Fly positions were detected using particle detection (diameter={diameter} px, "
+        f"minimum mass={minmass}), with binarization via {threshold_desc}. "
+        f"The field of view was divided into {vials} vertical strips (vials). "
+        f"Climbing speed was estimated by local linear regression over a {window}-frame "
+        f"sliding window, {tracking}. "
+        f"Spatial calibration: {pixel_to_cm} pixels/cm."
+    )
+    return text

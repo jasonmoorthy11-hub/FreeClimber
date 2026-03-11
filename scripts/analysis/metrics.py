@@ -78,6 +78,15 @@ def compute_per_fly_metrics(df: pd.DataFrame, frame_rate: int = 30,
         total_possible = track.frame.max() - track.frame.min() + 1
         completeness = n_frames / total_possible if total_possible > 0 else 0.0
 
+        # AUC: area under climbing curve (y-position vs time)
+        time_vals = track.frame.values.astype(float)
+        if convert_to_cm_sec:
+            time_vals = time_vals / frame_rate
+        y_vals = track.y.values.astype(float)
+        if convert_to_cm_sec:
+            y_vals = y_vals / pixel_to_cm
+        auc = float(np.trapz(y_vals, time_vals)) if len(time_vals) > 1 else 0.0
+
         results.append({
             'particle': pid,
             'vial': int(vial),
@@ -90,6 +99,7 @@ def compute_per_fly_metrics(df: pd.DataFrame, frame_rate: int = 30,
             'horizontal_drift': round(x_drift, 4),
             'track_completeness': round(completeness, 4),
             'mean_speed': round(np.mean(speeds) * conversion, 4),
+            'auc': round(auc, 4),
         })
 
     return pd.DataFrame(results)

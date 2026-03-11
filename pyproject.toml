@@ -39,7 +39,14 @@ dependencies = [
     "customtkinter>=5.2",
 ]
 
+[project.scripts]
+freeclimber = "scripts.gui.app:main"
+
 [project.optional-dependencies]
+reports = ["jinja2>=3.1", "weasyprint>=60"]
+interactive = ["plotly>=5.18"]
+excel = ["openpyxl>=3.1"]
+all = ["jinja2>=3.1", "weasyprint>=60", "plotly>=5.18", "openpyxl>=3.1"]
 dev = [
     "pytest>=7.0",
     "ruff>=0.3",
@@ -57,7 +64,17 @@ include = ["scripts*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 collect_ignore_glob = ["scripts/**"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
 
 [tool.ruff]
 target-version = "py310"
 line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501", "E402", "F401"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["scripts"]

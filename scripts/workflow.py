@@ -5,9 +5,12 @@ fully automated RING assay experiments.
 """
 
 import os
+import sys
 import time
 import logging
 from datetime import datetime
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 logger = logging.getLogger(__name__)
 

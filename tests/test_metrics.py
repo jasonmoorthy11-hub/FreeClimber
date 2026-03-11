@@ -34,6 +34,11 @@ class TestPerFlyMetrics:
         assert (result.path_straightness >= 0).all()
         assert (result.path_straightness <= 1.01).all()  # small float tolerance
 
+    def test_auc_computed(self, sample_tracking_df):
+        result = compute_per_fly_metrics(sample_tracking_df)
+        assert 'auc' in result.columns
+        assert (result.auc > 0).all()
+
 
 class TestPopulationMetrics:
     def test_with_slopes(self, sample_slopes_df):

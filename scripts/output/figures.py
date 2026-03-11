@@ -217,12 +217,103 @@ def _add_significance_brackets(ax, group_names, significance):
     ax.set_ylim(top=current_y + y_step)
 
 
+def per_fly_trajectory_overlay(df: pd.DataFrame, first_frame: np.ndarray = None,
+                                vials: int = 3, ax=None) -> plt.Axes:
+    """Plot all tracked particles' paths overlaid on first video frame, color-coded by vial."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+    if first_frame is not None:
+        ax.imshow(first_frame, cmap='gray', alpha=0.5)
+
+    if 'particle' not in df.columns:
+        ax.set_title("No individual tracking data")
+        return ax
+
+    colors = get_color_palette(vials)
+    for pid, track in df.groupby('particle'):
+        track = track.sort_values('frame')
+        vial = int(track.vial.mode().iloc[0]) if 'vial' in track.columns else 1
+        color = colors[(vial - 1) % len(colors)]
+        ax.plot(track.x.values, track.y.values, color=color, alpha=0.4, linewidth=0.8)
+
+    legend_elements = [Line2D([0], [0], color=colors[i], label=f'Vial {i+1}')
+                       for i in range(min(vials, len(colors)))]
+    ax.legend(handles=legend_elements, loc='upper right', frameon=False, fontsize='small')
+    ax.set_title('Per-Fly Trajectory Overlay')
+    ax.set_xlabel('X (px)')
+    ax.set_ylabel('Y (px)')
+    return ax
+
+
+def per_fly_metrics_heatmap(metrics_df: pd.DataFrame, ax=None) -> plt.Axes:
+    """Heatmap of fly_id x metric using imshow."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 6))
+
+    numeric_cols = [c for c in metrics_df.columns
+                    if c not in ('particle', 'vial') and metrics_df[c].dtype in ['float64', 'int64', 'float32']]
+    if not numeric_cols:
+        ax.set_title("No numeric metrics")
+        return ax
+
+    data = metrics_df[numeric_cols].values
+    # Normalize each column to 0-1 for display
+    with np.errstate(invalid='ignore'):
+        mins = np.nanmin(data, axis=0)
+        maxs = np.nanmax(data, axis=0)
+        ranges = maxs - mins
+        ranges[ranges == 0] = 1
+        normed = (data - mins) / ranges
+
+    im = ax.imshow(normed, aspect='auto', cmap='YlOrRd', interpolation='nearest')
+    ax.set_xticks(range(len(numeric_cols)))
+    ax.set_xticklabels(numeric_cols, rotation=45, ha='right', fontsize=8)
+    fly_labels = metrics_df['particle'].values if 'particle' in metrics_df.columns else range(len(metrics_df))
+    ax.set_yticks(range(len(fly_labels)))
+    ax.set_yticklabels(fly_labels, fontsize=7)
+    ax.set_ylabel('Fly ID')
+    ax.set_title('Per-Fly Metrics Heatmap')
+    plt.colorbar(im, ax=ax, label='Normalized value')
+    return ax
+
+
+def batch_comparison(results: dict, ylabel: str = 'Mean Climbing Speed',
+                     title: str = 'Batch Comparison', ax=None) -> plt.Axes:
+    """Grouped bar chart comparing mean speed across multiple videos/genotypes.
+
+    Args:
+        results: {video_or_genotype_name: array_of_slopes}
+    """
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 5))
+
+    colors = get_color_palette(len(results))
+    names = list(results.keys())
+    means = [np.nanmean(np.asarray(v, dtype=float)) for v in results.values()]
+    sems = [np.nanstd(np.asarray(v, dtype=float)) / np.sqrt(len(v)) if len(v) > 1 else 0
+            for v in results.values()]
+
+    x = np.arange(len(names))
+    ax.bar(x, means, yerr=sems, color=colors, alpha=0.7, capsize=4,
+           edgecolor='black', linewidth=0.5)
+    ax.set_xticks(x)
+    ax.set_xticklabels(names, rotation=45, ha='right')
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    return ax
+
+
 def save_figure(fig, path: str, formats: list = None):
-    """Save figure in multiple formats (default: PNG + PDF)."""
+    """Save figure in multiple formats.
+
+    Supported formats: 'png', 'svg', 'eps', 'pdf'.
+    """
     if formats is None:
         formats = ['png']
 
     for fmt in formats:
         out_path = path.rsplit('.', 1)[0] + '.' + fmt
-        fig.savefig(out_path, dpi=300, bbox_inches='tight', transparent=(fmt == 'pdf'))
+        fig.savefig(out_path, format=fmt, dpi=300, bbox_inches='tight',
+                    transparent=(fmt in ('pdf', 'svg')))
         logger.info(f'Saved: {out_path}')
