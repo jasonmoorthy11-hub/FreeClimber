@@ -307,6 +307,194 @@ def batch_comparison(results: dict, ylabel: str = 'Mean Climbing Speed',
     return ax
 
 
+def raincloud_plot(groups: dict, ylabel: str = 'Speed', title: str = '',
+                   ax=None) -> plt.Axes:
+    """Half-violin + box + jittered swarm (Nature Methods standard)."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(6, 4))
+
+    from scipy.stats import gaussian_kde
+
+    colors = get_color_palette(len(groups))
+    names = list(groups.keys())
+
+    for i, (_name, values) in enumerate(groups.items()):
+        values = np.asarray(values, dtype=float)
+        values = values[~np.isnan(values)]
+        if len(values) < 2:
+            continue
+        color = colors[i]
+        pos = i + 1
+
+        # Half violin (left side)
+        kde = gaussian_kde(values, bw_method=0.3)
+        y_range = np.linspace(values.min(), values.max(), 100)
+        density = kde(y_range)
+        density = density / density.max() * 0.35  # scale width
+        ax.fill_betweenx(y_range, pos - density, pos, alpha=0.5, color=color)
+
+        # Narrow box (center)
+        q1, med, q3 = np.percentile(values, [25, 50, 75])
+        ax.plot([pos, pos], [q1, q3], color='black', linewidth=2.5)
+        ax.plot(pos, med, 'o', color='white', markersize=4, zorder=5,
+                markeredgecolor='black', markeredgewidth=1)
+
+        # Jittered swarm (right side)
+        jitter = np.random.uniform(0.05, 0.25, len(values))
+        ax.scatter(pos + jitter, values, color=color, edgecolor='black',
+                   linewidth=0.3, s=12, alpha=0.7, zorder=4)
+
+    if not any(len(np.asarray(v, dtype=float)[~np.isnan(np.asarray(v, dtype=float))]) >= 2 for v in groups.values()):
+        ax.text(0.5, 0.5, 'Insufficient data', transform=ax.transAxes,
+                ha='center', va='center', fontsize=12, color='gray')
+
+    ax.set_xticks(range(1, len(names) + 1))
+    ax.set_xticklabels(names, rotation=45 if len(names) > 4 else 0, ha='right')
+    ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+    return ax
+
+
+def per_fly_speed_timeseries(df: pd.DataFrame, vial: int = None,
+                              highlight_particle: int = None,
+                              ax=None) -> plt.Axes:
+    """Individual velocity curves over time with mean +/- SEM overlay."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 4))
+
+    if 'particle' not in df.columns:
+        ax.set_title("No individual tracking data")
+        return ax
+
+    subset = df[df.vial == vial] if vial is not None and 'vial' in df.columns else df
+    colors = get_color_palette(subset['vial'].nunique() if 'vial' in subset.columns else 1)
+
+    for pid, track in subset.groupby('particle'):
+        track = track.sort_values('frame')
+        if len(track) < 3:
+            continue
+        dt = np.diff(track.frame.values).astype(float)
+        dy = np.diff(track.y.values)
+        speed = dy / np.maximum(dt, 1)
+        frames = track.frame.values[1:]
+        vial_idx = (int(track.vial.mode().iloc[0]) - 1) % len(colors) if 'vial' in track.columns else 0
+        alpha = 0.8 if pid == highlight_particle else 0.15
+        lw = 1.5 if pid == highlight_particle else 0.5
+        ax.plot(frames, speed, color=colors[vial_idx], alpha=alpha, linewidth=lw)
+
+    # Mean +/- SEM
+    all_speeds = []
+    for _pid, track in subset.groupby('particle'):
+        track = track.sort_values('frame')
+        if len(track) < 3:
+            continue
+        dt = np.diff(track.frame.values).astype(float)
+        dy = np.diff(track.y.values)
+        speed = pd.Series(dy / np.maximum(dt, 1), index=track.frame.values[1:])
+        all_speeds.append(speed)
+
+    if all_speeds:
+        combined = pd.concat(all_speeds, axis=1)
+        mean_speed = combined.mean(axis=1)
+        sem_speed = combined.sem(axis=1)
+        ax.plot(mean_speed.index, mean_speed.values, color='#222222', linewidth=2, zorder=10)
+        ax.fill_between(mean_speed.index, (mean_speed - sem_speed).values,
+                         (mean_speed + sem_speed).values, alpha=0.3, color='#222222', zorder=9)
+
+    ax.set_xlabel('Frame')
+    ax.set_ylabel('Vertical Speed (px/frame)')
+    ax.set_title('Per-Fly Speed Time Series')
+    return ax
+
+
+def spaghetti_trajectory(df: pd.DataFrame, vial: int = None,
+                          ax=None) -> plt.Axes:
+    """Individual Y-displacement vs time with bold mean +/- SEM."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 4))
+
+    if 'particle' not in df.columns:
+        ax.set_title("No individual tracking data")
+        return ax
+
+    subset = df[df.vial == vial] if vial is not None and 'vial' in df.columns else df
+    colors = get_color_palette(subset['vial'].nunique() if 'vial' in subset.columns else 1)
+
+    trajectories = []
+    for _pid, track in subset.groupby('particle'):
+        track = track.sort_values('frame')
+        if len(track) < 3:
+            continue
+        y_disp = track.y.values[0] - track.y.values  # positive = upward
+        vial_idx = (int(track.vial.mode().iloc[0]) - 1) % len(colors) if 'vial' in track.columns else 0
+        ax.plot(track.frame.values, y_disp, color=colors[vial_idx], alpha=0.2, linewidth=0.6)
+        trajectories.append(pd.Series(y_disp, index=track.frame.values))
+
+    if trajectories:
+        combined = pd.concat(trajectories, axis=1)
+        mean_y = combined.mean(axis=1)
+        sem_y = combined.sem(axis=1)
+        ax.plot(mean_y.index, mean_y.values, color='#222222', linewidth=2, zorder=10)
+        ax.fill_between(mean_y.index, (mean_y - sem_y).values,
+                         (mean_y + sem_y).values, alpha=0.3, color='#222222', zorder=9)
+
+    ax.set_xlabel('Frame')
+    ax.set_ylabel('Y Displacement (px, upward+)')
+    ax.set_title('Individual Trajectories')
+    return ax
+
+
+def cdf_comparison(groups: dict, xlabel: str = 'Speed',
+                    ax=None) -> plt.Axes:
+    """Empirical CDF per group as step functions."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(6, 4))
+
+    colors = get_color_palette(len(groups))
+    for (name, values), color in zip(groups.items(), colors):
+        values = np.sort(np.asarray(values, dtype=float))
+        values = values[~np.isnan(values)]
+        if len(values) == 0:
+            continue
+        cdf = np.arange(1, len(values) + 1) / len(values)
+        ax.step(values, cdf, where='post', color=color, label=name, linewidth=1.5)
+        med = np.median(values)
+        ax.axvline(med, color=color, linestyle=':', alpha=0.5, linewidth=0.8)
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel('Cumulative Probability')
+    ax.set_title('CDF Comparison')
+    ax.legend(frameon=False, fontsize='small')
+    return ax
+
+
+def climbing_index_chart(ci_data: dict, ax=None) -> plt.Axes:
+    """Horizontal bars showing % above threshold per vial."""
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(6, 3))
+
+    if not ci_data:
+        ax.set_title("No climbing index data")
+        return ax
+
+    vials = sorted(ci_data.keys())
+    values = [ci_data[v] for v in vials]
+    labels = [f'Vial {v}' for v in vials]
+    norm_vals = np.array(values) / 100.0
+    cmap = plt.cm.RdYlGn
+    bar_colors = [cmap(v) for v in norm_vals]
+
+    ax.barh(labels, values, color=bar_colors, edgecolor='black', linewidth=0.5, height=0.6)
+    for i, val in enumerate(values):
+        ax.text(val + 1, i, f'{val:.1f}%', va='center', fontsize=9)
+
+    ax.set_xlabel('Climbing Index (%)')
+    ax.set_xlim(0, 110)
+    ax.set_title('Climbing Index by Vial')
+    return ax
+
+
 def save_figure(fig, path: str, formats: list = None):
     """Save figure in multiple formats.
 

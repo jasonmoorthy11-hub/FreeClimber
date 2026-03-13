@@ -544,7 +544,7 @@ class FreeClimberApp(ctk.CTk):
             fg_color=C["accent"], hover_color=C["accent_hover"],
             border_color=C["border"],
         ).pack(anchor="w", pady=2)
-        self.tracking_var = ctk.BooleanVar(value=False)
+        self.tracking_var = ctk.BooleanVar(value=True)
         ctk.CTkCheckBox(
             check_frame, text="Individual fly tracking", variable=self.tracking_var,
             font=(FONT_FAMILY, 12), text_color=C["text"],
@@ -898,6 +898,13 @@ class FreeClimberApp(ctk.CTk):
         self.dist_canvas = FigureCanvasTkAgg(self.dist_fig, master=dist_tab)
         self.dist_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
 
+        raincloud_tab = self.results_plot_tabview.add("Raincloud")
+        raincloud_tab.grid_rowconfigure(0, weight=1)
+        raincloud_tab.grid_columnconfigure(0, weight=1)
+        self.raincloud_fig = Figure(figsize=(6, 3), dpi=100)
+        self.raincloud_canvas = FigureCanvasTkAgg(self.raincloud_fig, master=raincloud_tab)
+        self.raincloud_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+
         perfly_plot_tab = self.results_plot_tabview.add("Per-Fly")
         perfly_plot_tab.grid_rowconfigure(0, weight=1)
         perfly_plot_tab.grid_columnconfigure(0, weight=1)
@@ -905,13 +912,28 @@ class FreeClimberApp(ctk.CTk):
         self.perfly_canvas = FigureCanvasTkAgg(self.perfly_fig, master=perfly_plot_tab)
         self.perfly_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
 
+        heatmap_tab = self.results_plot_tabview.add("Heatmap")
+        heatmap_tab.grid_rowconfigure(0, weight=1)
+        heatmap_tab.grid_columnconfigure(0, weight=1)
+        self.heatmap_fig = Figure(figsize=(6, 3), dpi=100)
+        self.heatmap_canvas = FigureCanvasTkAgg(self.heatmap_fig, master=heatmap_tab)
+        self.heatmap_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+
+        speed_curves_tab = self.results_plot_tabview.add("Speed Curves")
+        speed_curves_tab.grid_rowconfigure(0, weight=1)
+        speed_curves_tab.grid_columnconfigure(0, weight=1)
+        self.speed_curves_fig = Figure(figsize=(6, 3), dpi=100)
+        self.speed_curves_canvas = FigureCanvasTkAgg(self.speed_curves_fig, master=speed_curves_tab)
+        self.speed_curves_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+
     def _build_statistics_tab(self):
         tab = self.tabview.add("Statistics")
-        tab.grid_rowconfigure(0, weight=1)
-        tab.grid_rowconfigure(1, weight=1)
+        tab.grid_rowconfigure(0, weight=4)
+        tab.grid_rowconfigure(1, weight=3)
+        tab.grid_rowconfigure(2, weight=3)
         tab.grid_columnconfigure(0, weight=1)
 
-        # Box + swarm plot at top
+        # Raincloud plot at top
         stats_plot_frame = ctk.CTkFrame(tab, fg_color=C["bg_card"], corner_radius=8)
         stats_plot_frame.grid(row=0, column=0, sticky="nsew", padx=S["xs"], pady=(S["xs"], S["xs"]))
         stats_plot_frame.grid_rowconfigure(0, weight=1)
@@ -920,12 +942,21 @@ class FreeClimberApp(ctk.CTk):
         self.stats_canvas = FigureCanvasTkAgg(self.stats_fig, master=stats_plot_frame)
         self.stats_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
 
+        # CDF plot in middle
+        cdf_frame = ctk.CTkFrame(tab, fg_color=C["bg_card"], corner_radius=8)
+        cdf_frame.grid(row=1, column=0, sticky="nsew", padx=S["xs"], pady=(0, S["xs"]))
+        cdf_frame.grid_rowconfigure(0, weight=1)
+        cdf_frame.grid_columnconfigure(0, weight=1)
+        self.cdf_fig = Figure(figsize=(6, 2.5), dpi=100)
+        self.cdf_canvas = FigureCanvasTkAgg(self.cdf_fig, master=cdf_frame)
+        self.cdf_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+
         # Formatted text at bottom
         self.stats_text = ctk.CTkTextbox(
             tab, font=("Menlo", 11), state="disabled", wrap="word",
             fg_color=C["bg_card"], text_color=C["text"],
         )
-        self.stats_text.grid(row=1, column=0, sticky="nsew", padx=S["xs"], pady=S["xs"])
+        self.stats_text.grid(row=2, column=0, sticky="nsew", padx=S["xs"], pady=S["xs"])
         self._set_stats_text("Run an analysis to see statistics here.")
 
     # ------------------------------------------------------------------
@@ -1051,7 +1082,7 @@ class FreeClimberApp(ctk.CTk):
         self.convert_cm_var.set(params.get('convert_to_cm_sec', False))
         self.trim_var.set(params.get('trim_outliers', False))
         self.bg_method_var.set(params.get('background_method', 'temporal_median'))
-        self.tracking_var.set(params.get('individual_tracking', False))
+        self.tracking_var.set(params.get('individual_tracking', True))
 
     # ------------------------------------------------------------------
     # ROI drawing on Setup tab
@@ -1303,11 +1334,23 @@ class FreeClimberApp(ctk.CTk):
                 total_flies = sum(pop['fly_count_per_vial'].values())
                 summary_parts.append(f"Flies tracked: ~{total_flies:.0f}")
 
+        has_tracking = result.get('has_individual_tracking', False) if isinstance(result, dict) else False
+        summary_parts.append(f"Tracking: {'ON' if has_tracking else 'OFF'}")
+
+        per_fly = result.get('per_fly_metrics') if isinstance(result, dict) else None
+        if per_fly is not None and len(per_fly) > 0:
+            summary_parts.append(f"Individual flies: {len(per_fly)}")
+
+        ci_data = result.get('climbing_index') if isinstance(result, dict) else None
+        if ci_data:
+            mean_ci = np.mean(list(ci_data.values()))
+            summary_parts.append(f"Climbing idx: {mean_ci:.1f}%")
+
         self.summary_label.configure(text="  |  ".join(summary_parts), text_color=C["text"])
 
         # --- Slopes table with quality dots ---
         self.slopes_tree.delete(*self.slopes_tree.get_children())
-        cols = list(df.columns) + (['quality'] if quality else [])
+        cols = list(df.columns) + (['q_score'] if quality else [])
         self.slopes_tree["columns"] = cols
         for col in cols:
             self.slopes_tree.heading(col, text=col)
@@ -1339,8 +1382,11 @@ class FreeClimberApp(ctk.CTk):
         # --- Population stats text ---
         self._update_pop_stats_text(pop)
 
-        # --- Speed chart ---
+        # --- Speed chart (bar_chart_with_points) ---
         self._plot_speed_chart(df)
+
+        # --- Raincloud plot ---
+        self._plot_raincloud(df)
 
         # --- Trajectory plot (using figures.py) ---
         positions = self.controller.get_positions()
@@ -1352,6 +1398,12 @@ class FreeClimberApp(ctk.CTk):
         # --- Per-fly overlay plot ---
         self._plot_perfly_overlay(result)
 
+        # --- Per-fly metrics heatmap ---
+        self._plot_heatmap(result)
+
+        # --- Per-fly speed curves ---
+        self._plot_speed_curves(result)
+
     def _quality_dots(self, score: float) -> str:
         filled = round(score * 4)
         return '\u25cf' * filled + '\u25cb' * (4 - filled)
@@ -1360,36 +1412,61 @@ class FreeClimberApp(ctk.CTk):
         self.speed_fig.clear()
         ax = self.speed_fig.add_subplot(111)
 
+        groups = self._build_speed_groups(df)
+        if groups:
+            try:
+                from output.figures import bar_chart_with_points
+                bar_chart_with_points(groups, ylabel='Climbing Speed',
+                                      title='Climbing Speed by Vial', ax=ax)
+            except Exception:
+                ax.set_title("Speed chart error")
+        self.speed_canvas.draw()
+
+    def _build_speed_groups(self, df: pd.DataFrame) -> dict:
         ycol = None
         for c in df.columns:
             if any(kw in c.lower() for kw in ['slope', 'velocity', 'speed']):
                 ycol = c
                 break
-        if ycol is None and len(df.columns) >= 2:
-            ycol = df.columns[1]
+        if ycol is None:
+            for c in df.columns:
+                if pd.api.types.is_numeric_dtype(df[c]):
+                    ycol = c
+                    break
+        if ycol is None:
+            return {}
 
-        if ycol:
-            y = pd.to_numeric(df[ycol], errors="coerce").values
+        group_col = None
+        for c in df.columns:
+            if 'vial' in c.lower():
+                group_col = c
+                break
+
+        groups = {}
+        if group_col and df[group_col].nunique() >= 2:
+            for name, sub in df.groupby(group_col):
+                vals = pd.to_numeric(sub[ycol], errors='coerce').dropna().values
+                if len(vals) > 0:
+                    groups[f"Vial {name}"] = vals
+        else:
+            vals = pd.to_numeric(df[ycol], errors='coerce').dropna().values
+            if len(vals) > 0:
+                groups['All'] = vals
+        return groups
+
+    def _plot_raincloud(self, df: pd.DataFrame):
+        self.raincloud_fig.clear()
+        ax = self.raincloud_fig.add_subplot(111)
+
+        groups = self._build_speed_groups(df)
+        if len(groups) >= 1:
             try:
-                from output.figures import get_color_palette
-                colors = get_color_palette(len(y))
-            except ImportError:
-                colors = [C["accent"]] * len(y)
-
-            x = list(range(1, len(df) + 1))
-            bars = ax.bar(x, y, color=colors[:len(y)], edgecolor='black',
-                         linewidth=0.5, alpha=0.85)
-            # Value labels on bars
-            for bar, val in zip(bars, y):
-                if not np.isnan(val):
-                    ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
-                            f'{val:.2f}', ha='center', va='bottom', fontsize=8,
-                            color=C["text_dim"])
-            ax.set_xlabel("Vial")
-            ax.set_ylabel(ycol)
-            ax.set_title("Climbing Speed by Vial", fontsize=11)
-
-        self.speed_canvas.draw()
+                from output.figures import raincloud_plot
+                raincloud_plot(groups, ylabel='Climbing Speed',
+                               title='Speed Distribution (Raincloud)', ax=ax)
+            except Exception:
+                ax.set_title("Raincloud plot error")
+        self.raincloud_canvas.draw()
 
     def _plot_trajectory(self, positions, result):
         self.traj_fig.clear()
@@ -1484,6 +1561,42 @@ class FreeClimberApp(ctk.CTk):
 
         self.perfly_canvas.draw()
 
+    def _plot_heatmap(self, result):
+        self.heatmap_fig.clear()
+        ax = self.heatmap_fig.add_subplot(111)
+
+        per_fly = result.get('per_fly_metrics') if isinstance(result, dict) else None
+        if per_fly is not None and len(per_fly) > 0:
+            try:
+                from output.figures import per_fly_metrics_heatmap
+                per_fly_metrics_heatmap(per_fly, ax=ax)
+            except Exception as e:
+                ax.set_title(f"Heatmap error: {e}", fontsize=9)
+        else:
+            ax.set_title("Per-fly metrics not available", fontsize=10, color=C["text_dim"])
+            ax.set_facecolor(C["bg_card"])
+
+        self.heatmap_canvas.draw()
+
+    def _plot_speed_curves(self, result):
+        self.speed_curves_fig.clear()
+        ax = self.speed_curves_fig.add_subplot(111)
+
+        has_tracking = result.get('has_individual_tracking', False) if isinstance(result, dict) else False
+        raw_df = result.get('raw_tracking_df') if isinstance(result, dict) else None
+
+        if has_tracking and raw_df is not None and 'particle' in raw_df.columns:
+            try:
+                from output.figures import per_fly_speed_timeseries
+                per_fly_speed_timeseries(raw_df, ax=ax)
+            except Exception as e:
+                ax.set_title(f"Speed curves error: {e}", fontsize=9)
+        else:
+            ax.set_title("Per-fly tracking not available", fontsize=10, color=C["text_dim"])
+            ax.set_facecolor(C["bg_card"])
+
+        self.speed_curves_canvas.draw()
+
     def _update_pop_stats_text(self, pop):
         self.pop_stats_text.configure(state="normal")
         self.pop_stats_text.delete("0.0", "end")
@@ -1557,17 +1670,16 @@ class FreeClimberApp(ctk.CTk):
                     if len(vals) > 0:
                         groups[f"Vial {name}"] = vals
 
-        # --- Box + swarm plot ---
+        # --- Raincloud plot ---
         self.stats_fig.clear()
         ax = self.stats_fig.add_subplot(111)
         if len(groups) >= 2:
             try:
+                from output.figures import raincloud_plot
+                raincloud_plot(groups, ylabel=slope_col, title="Distribution by Group", ax=ax)
+            except Exception:
                 from output.figures import box_swarm_plot
                 box_swarm_plot(groups, ylabel=slope_col, title="Distribution by Group", ax=ax)
-            except Exception:
-                # Fallback: basic boxplot
-                ax.boxplot(list(groups.values()), tick_labels=list(groups.keys()))
-                ax.set_ylabel(slope_col)
         elif len(groups) == 1:
             name, vals = next(iter(groups.items()))
             ax.hist(vals, bins='auto', color=C["accent"], alpha=0.7, edgecolor='black')
@@ -1575,6 +1687,17 @@ class FreeClimberApp(ctk.CTk):
             ax.set_ylabel("Count")
             ax.set_title(f"Distribution: {name}")
         self.stats_canvas.draw()
+
+        # --- CDF plot ---
+        self.cdf_fig.clear()
+        cdf_ax = self.cdf_fig.add_subplot(111)
+        if len(groups) >= 1:
+            try:
+                from output.figures import cdf_comparison
+                cdf_comparison(groups, xlabel=slope_col, ax=cdf_ax)
+            except Exception:
+                cdf_ax.set_title("CDF plot error")
+        self.cdf_canvas.draw()
 
         # --- Formatted text ---
         lines = ["\u2550" * 50, "  STATISTICAL ANALYSIS", "\u2550" * 50, ""]

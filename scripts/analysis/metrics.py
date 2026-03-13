@@ -51,13 +51,14 @@ def compute_per_fly_metrics(df: pd.DataFrame, frame_rate: int = 30,
 
         # Climbing speed (mean vertical velocity)
         climbing_speed = np.mean(vy) * conversion
+        upward_speed = np.mean(np.abs(vy[vy < 0])) * conversion if np.any(vy < 0) else 0.0
 
         # Start latency: frames until first sustained upward movement (3+ consecutive)
-        upward = vy > 0
+        upward = vy < 0
         start_latency = _find_sustained_start(upward, threshold=3)
 
         # Maximum height reached
-        max_height = track.y.max()
+        max_height = track.y.values[0] - track.y.min()
         if convert_to_cm_sec:
             max_height = max_height / pixel_to_cm
 
@@ -102,6 +103,7 @@ def compute_per_fly_metrics(df: pd.DataFrame, frame_rate: int = 30,
             'horizontal_drift': round(x_drift, 4),
             'track_completeness': round(completeness, 4),
             'mean_speed': round(np.mean(speeds) * conversion, 4),
+            'upward_speed': round(upward_speed, 4),
             'auc': round(auc, 4),
         })
 
@@ -157,7 +159,7 @@ def climbing_index(df: pd.DataFrame, threshold_height: float = None,
 
     for vial, vdf in frame_df.groupby('vial'):
         n_total = len(vdf)
-        n_above = len(vdf[vdf.y >= threshold_height])
+        n_above = len(vdf[vdf.y <= threshold_height])
         result[int(vial)] = round(n_above / n_total * 100, 1) if n_total > 0 else 0.0
 
     return result
@@ -173,7 +175,7 @@ def _find_sustained_start(upward: np.ndarray, threshold: int = 3) -> int:
                 return i - threshold + 1
         else:
             count = 0
-    return len(upward)  # never sustained
+    return -1  # sentinel: fly never sustained upward movement
 
 
 def _count_hesitations(speeds: np.ndarray, threshold: float, min_duration: int = 3) -> int:

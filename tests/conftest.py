@@ -66,6 +66,7 @@ def sample_slopes_df():
         'r_value': [0.95, 0.97, 0.89, 0.93],
         'p_value': [0.001, 0.0005, 0.01, 0.002],
         'std_err': [0.02, 0.015, 0.04, 0.025],
+        'quality': ['good', 'good', 'low_r', 'good'],
         'geno': ['wt', 'wt', 'wt', 'wt'],
     })
 
