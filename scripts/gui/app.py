@@ -1236,23 +1236,19 @@ class FreeClimberApp(ctk.CTk):
         self.status_var.set("Running analysis...")
         self.run_btn.configure(state="disabled", text="Running...")
         self.progress_bar.set(0)
-        self.progress_label.configure(text="Starting...")
+        self.progress_label.configure(text="Processing...")
         self.update_idletasks()
 
         params = self._collect_params()
+        self.diag_fig.clear()
+        axes = [self.diag_fig.add_subplot(2, 3, i + 1) for i in range(6)]
 
-        def on_progress(step, total, message):
-            self.after(0, lambda s=step, t=total, m=message: self._update_progress(s, t, m))
-
-        def on_done(result):
-            self.after(0, lambda r=result: self._on_analysis_done(r))
-
-        self.controller.run_analysis(params, progress_callback=on_progress, done_callback=on_done)
-
-    def _update_progress(self, step, total, message):
-        if total > 0:
-            self.progress_bar.set(step / total)
-        self.progress_label.configure(text=message)
+        try:
+            self.update_idletasks()
+            result = self.controller.test_parameters(params, axes)
+        except Exception as e:
+            result = e
+        self._on_analysis_done(result)
 
     def _on_analysis_done(self, result):
         self.run_btn.configure(state="normal", text="RUN ANALYSIS")
@@ -1263,6 +1259,9 @@ class FreeClimberApp(ctk.CTk):
             self.status_var.set("Analysis failed")
             self.progress_label.configure(text="Failed")
             return
+
+        self.diag_fig.tight_layout()
+        self.diag_canvas.draw()
 
         if 'slopes_df' in result:
             self._populate_results(result)
