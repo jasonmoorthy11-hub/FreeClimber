@@ -25,7 +25,7 @@ class TestMethodsParagraph:
 
     def test_contains_version(self, sample_config):
         text = generate_methods_paragraph(sample_config)
-        assert 'v2.0' in text
+        assert 'v3.1' in text
 
 
 class TestHTMLReport:

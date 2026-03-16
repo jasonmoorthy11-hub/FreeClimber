@@ -1,4 +1,4 @@
-"""FreeClimber v2.0 — customtkinter GUI.
+"""FreeClimber v3.1 — customtkinter GUI.
 
 Professional desktop app replacing the legacy wxPython interface.
 Designed for non-technical lab members: sliders, tooltips, drag-and-drop,
@@ -7,21 +7,34 @@ dark mode, progressive disclosure.
 
 import logging
 import os
+import re
 import sys
 import threading
 import tkinter as tk
 from datetime import datetime
 from tkinter import filedialog, messagebox
 
+from PIL import Image
+
+logger = logging.getLogger(__name__)
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
+logging.getLogger('trackpy').setLevel(logging.WARNING)
+logging.getLogger('PIL').setLevel(logging.WARNING)
+
 # Bootstrap sys.path so bare imports work from any launch location
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+
+
+def _asset_path(filename):
+    base = getattr(sys, '_MEIPASS', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+    return os.path.join(base, 'scripts', 'gui', 'assets', filename)
 
 import customtkinter as ctk
 import matplotlib
 import numpy as np
 import pandas as pd
 
-matplotlib.use("TkAgg")
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from gui.controller import AnalysisController
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
@@ -39,7 +52,7 @@ C = {
     "bg_input":     "#12121f",
     "border":       "#2a2a45",
     "text":         "#e4e4ed",
-    "text_dim":     "#7a7a95",
+    "text_dim":     "#8585a0",
     "text_disabled":"#44445a",
     "accent":       "#53a8b6",
     "accent_hover": "#6bc4d0",
@@ -48,11 +61,23 @@ C = {
     "danger_hover": "#ff5a75",
     "success":      "#48bb78",
     "warning":      "#ecc94b",
+    "run":          "#4CAF50",
+    "run_hover":    "#5CC462",
+    "text_on_accent": "#ffffff",
 }
 
 S = {"xs": 4, "sm": 8, "md": 16, "lg": 24, "xl": 32, "xxl": 48}
 
 FONT_FAMILY = "Helvetica"
+
+F = {
+    "h1":      (FONT_FAMILY, 20, "bold"),
+    "h2":      (FONT_FAMILY, 15, "bold"),
+    "body":    (FONT_FAMILY, 13),
+    "body_b":  (FONT_FAMILY, 13, "bold"),
+    "caption": (FONT_FAMILY, 11),
+    "mono":    ("Menlo", 11),
+}
 
 plt.rcParams.update({
     'figure.facecolor': C["bg"],
@@ -66,11 +91,13 @@ plt.rcParams.update({
     'grid.alpha':       0.4,
     'axes.grid':        True,
     'grid.linestyle':   '--',
-    'axes.titlesize':   11,
-    'axes.labelsize':   10,
+    'axes.titlesize':   13,
+    'axes.labelsize':   12,
+    'xtick.labelsize':  10,
+    'ytick.labelsize':  10,
     'legend.facecolor': C["bg_card"],
     'legend.edgecolor': C["border"],
-    'legend.fontsize':  8,
+    'legend.fontsize':  10,
 })
 
 ctk.set_appearance_mode("dark")
@@ -99,18 +126,15 @@ TOOLTIPS = {
     'outlier_LR': "Left/right edge trim (% of vial width). Removes detections near edges.",
     'vial_id_vars': "Number of underscore-separated fields in filename that identify the vial.",
     'background_method': "Background subtraction method. 'temporal_median' is the published default.",
-    'individual_tracking': "Enable per-fly tracking with trackpy. Slower but gives individual fly metrics.",
+    'individual_tracking': "Per-fly tracking with trackpy (always enabled).",
 }
 
-# Section definitions: (key, icon, title)
-SECTIONS = [
-    ("video",      "\u25B6",  "Video"),
-    ("roi",        "\u2B21",  "Region of Interest"),
-    ("detection",  "\u25C9",  "Detection"),
-    ("experiment", "\u2699",  "Experiment"),
-    ("frames",     "\u25A4",  "Frames"),
-    ("naming",     "\u270E",  "Naming"),
-    ("profiles",   "\u2606",  "Profiles"),
+# Workflow step definitions
+STEPS = [
+    ("load",       "\u2460", "LOAD VIDEO"),
+    ("roi",        "\u2461", "REGION OF INTEREST"),
+    ("detection",  "\u2462", "DETECTION"),
+    ("analyze",    "\u2463", "ANALYZE"),
 ]
 
 
@@ -135,13 +159,13 @@ class ToolTip:
         self.tip_window = tw = tk.Toplevel(self.widget)
         tw.wm_overrideredirect(True)
         tw.wm_geometry(f"+{x}+{y}")
-        label = tk.Label(
-            tw, text=self.text, justify=tk.LEFT,
-            background=C["bg_card"], foreground=C["text"],
-            relief=tk.SOLID, borderwidth=1,
-            font=(FONT_FAMILY, 11), wraplength=300, padx=8, pady=6,
-        )
-        label.pack()
+        tw.configure(bg=C["bg_card"])
+        frame = ctk.CTkFrame(tw, fg_color=C["bg_card"],
+            border_color=C["accent_muted"], border_width=1, corner_radius=6)
+        frame.pack(fill="both", expand=True, padx=1, pady=1)
+        ctk.CTkLabel(frame, text=self.text, justify="left",
+            text_color=C["text"], font=F["caption"],
+            wraplength=300).pack(padx=S["sm"], pady=S["xs"])
 
     def hide(self, event=None):
         if self.tip_window:
@@ -156,7 +180,7 @@ class CollapsibleCard(ctk.CTkFrame):
     """A card with a clickable header that collapses/expands its body."""
 
     def __init__(self, parent, icon="", title="", initially_open=True, **kwargs):
-        super().__init__(parent, fg_color=C["bg_card"], corner_radius=12, **kwargs)
+        super().__init__(parent, fg_color=C["bg_card"], corner_radius=10, **kwargs)
 
         self._open = initially_open
 
@@ -165,25 +189,26 @@ class CollapsibleCard(ctk.CTkFrame):
         self.header.pack(fill="x", padx=S["sm"], pady=(S["sm"], 0))
 
         self.chevron_label = ctk.CTkLabel(
-            self.header, text="\u25BE" if self._open else "\u25B8",
+            self.header, text="\u25BC" if self._open else "\u25B6",
             font=(FONT_FAMILY, 14), text_color=C["accent"], width=18, anchor="w",
         )
         self.chevron_label.pack(side="left")
 
-        icon_label = ctk.CTkLabel(
-            self.header, text=icon, font=(FONT_FAMILY, 14),
-            text_color=C["accent"], width=22, anchor="w",
-        )
-        icon_label.pack(side="left", padx=(0, S["xs"]))
+        icon_badge = ctk.CTkFrame(self.header, width=22, height=22,
+            fg_color=C["accent_muted"], corner_radius=6)
+        icon_badge.pack(side="left", padx=(0, S["sm"]))
+        icon_badge.pack_propagate(False)
+        ctk.CTkLabel(icon_badge, text=icon, font=(FONT_FAMILY, 10, "bold"),
+            text_color=C["accent"], anchor="center").pack(expand=True)
 
         title_label = ctk.CTkLabel(
-            self.header, text=title.upper(),
+            self.header, text=title,
             font=(FONT_FAMILY, 12, "bold"), text_color=C["text"], anchor="w",
         )
         title_label.pack(side="left", fill="x", expand=True)
 
         # Make entire header clickable
-        for w in (self.header, self.chevron_label, icon_label, title_label):
+        for w in (self.header, self.chevron_label, icon_badge, title_label):
             w.bind("<Button-1>", self._toggle)
 
         # Body container
@@ -192,12 +217,28 @@ class CollapsibleCard(ctk.CTkFrame):
             self.body.pack(fill="x", padx=S["sm"], pady=(S["xs"], S["sm"]))
 
     def _toggle(self, event=None):
+        if hasattr(self, '_enabled') and not self._enabled:
+            return
         self._open = not self._open
-        self.chevron_label.configure(text="\u25BE" if self._open else "\u25B8")
+        self.chevron_label.configure(text="\u25BC" if self._open else "\u25B6")
         if self._open:
             self.body.pack(fill="x", padx=S["sm"], pady=(S["xs"], S["sm"]))
         else:
             self.body.pack_forget()
+
+    def set_enabled(self, enabled: bool):
+        self._enabled = enabled
+        color = C["text"] if enabled else C["text_disabled"]
+        opacity_fg = C["bg_card"] if enabled else C["bg_hover"]
+        self.configure(fg_color=opacity_fg)
+        for w in self.header.winfo_children():
+            if hasattr(w, 'configure'):
+                try:
+                    w.configure(text_color=color)
+                except Exception:
+                    pass
+        if not enabled and self._open:
+            self._toggle()
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +309,74 @@ class ParameterSlider(ctk.CTkFrame):
         self.entry.delete(0, tk.END)
         self.entry.insert(0, str(self.dtype(value)))
 
+    def set_enabled(self, enabled: bool):
+        state = "normal" if enabled else "disabled"
+        self.slider.configure(state=state)
+        self.entry.configure(state=state)
+        color = C["text"] if enabled else C["text_disabled"]
+        self.label.configure(text_color=color)
+
+
+# ---------------------------------------------------------------------------
+# PlotToolbar
+# ---------------------------------------------------------------------------
+class PlotToolbar(ctk.CTkFrame):
+    """Minimal dark-theme plot toolbar replacing NavigationToolbar2Tk."""
+
+    def __init__(self, parent, canvas, fig, save_callback=None):
+        super().__init__(parent, fg_color=C["bg_card"], height=32, corner_radius=0)
+        self.pack_propagate(False)
+        self.canvas = canvas
+
+        self._nav = NavigationToolbar2Tk(canvas, self)
+        self._nav.pack_forget()
+
+        ctk.CTkFrame(self, height=1, fg_color=C["border"]).pack(fill="x", side="top")
+
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=S["sm"], pady=S["xs"])
+
+        self._zoom_btn = self._make_btn(btn_frame, "\u2922", "Zoom", self._toggle_zoom)
+        self._pan_btn = self._make_btn(btn_frame, "\u2725", "Pan", self._toggle_pan)
+        self._make_btn(btn_frame, "\u21BA", "Reset view", lambda: (self._nav.home(), canvas.draw()))
+        self._make_btn(btn_frame, "\u2913", "Save figure", save_callback or (lambda: None))
+        self._active_mode = None
+
+    def _make_btn(self, parent, symbol, tip, command):
+        btn = ctk.CTkButton(parent, text=symbol, width=32, height=28,
+            fg_color="transparent", hover_color=C["bg_hover"],
+            text_color=C["text_dim"], font=("Menlo", 14),
+            corner_radius=6, command=command)
+        btn.pack(side="left", padx=2)
+        ToolTip(btn, tip)
+        return btn
+
+    def _toggle_zoom(self):
+        if self._active_mode == 'zoom':
+            self._nav.zoom()
+            self._zoom_btn.configure(fg_color="transparent")
+            self._active_mode = None
+        else:
+            if self._active_mode == 'pan':
+                self._nav.pan()
+                self._pan_btn.configure(fg_color="transparent")
+            self._nav.zoom()
+            self._zoom_btn.configure(fg_color=C["accent_muted"])
+            self._active_mode = 'zoom'
+
+    def _toggle_pan(self):
+        if self._active_mode == 'pan':
+            self._nav.pan()
+            self._pan_btn.configure(fg_color="transparent")
+            self._active_mode = None
+        else:
+            if self._active_mode == 'zoom':
+                self._nav.zoom()
+                self._zoom_btn.configure(fg_color="transparent")
+            self._nav.pan()
+            self._pan_btn.configure(fg_color=C["accent_muted"])
+            self._active_mode = 'pan'
+
 
 # ---------------------------------------------------------------------------
 # FreeClimberApp
@@ -277,7 +386,7 @@ class FreeClimberApp(ctk.CTk):
 
     def __init__(self):
         super().__init__()
-        self.title("FreeClimber v2.0")
+        self.title("FreeClimber v3.0")
         self.geometry("1340x860")
         self.minsize(1060, 700)
         self.configure(fg_color=C["bg"])
@@ -317,6 +426,9 @@ class FreeClimberApp(ctk.CTk):
         file_menu.add_command(label="Save Config\u2026  \u2318S", command=self._save_config)
         file_menu.add_separator()
         file_menu.add_command(label="Export Results\u2026  \u2318E", command=self._export_dialog)
+        file_menu.add_command(label="Save Current Figure\u2026  \u21e7\u2318S", command=self._save_current_figure)
+        file_menu.add_separator()
+        file_menu.add_command(label="Load Results\u2026  \u2318L", command=self._load_results)
         file_menu.add_separator()
         file_menu.add_command(label="Quit  \u2318Q", command=self.destroy)
         menubar.add_cascade(label="File", menu=file_menu)
@@ -336,6 +448,8 @@ class FreeClimberApp(ctk.CTk):
         self.bind("<Command-t>", lambda e: self._test_parameters())
         self.bind("<Command-s>", lambda e: self._save_config())
         self.bind("<Command-e>", lambda e: self._export_dialog())
+        self.bind("<Command-Shift-S>", lambda e: self._save_current_figure())
+        self.bind("<Command-l>", lambda e: self._load_results())
 
     # ------------------------------------------------------------------
     # Layout
@@ -350,32 +464,42 @@ class FreeClimberApp(ctk.CTk):
         self._build_content()
 
     def _build_sidebar(self):
+        self._preview_done = False
+
         sidebar_outer = ctk.CTkFrame(
             self.main_frame, width=340, fg_color=C["bg_panel"], corner_radius=0,
         )
         sidebar_outer.grid(row=0, column=0, sticky="nsw", padx=0, pady=0)
         sidebar_outer.grid_propagate(False)
 
-        # App title area
+        # Logo + App title area
+        try:
+            _logo_img = Image.open(_asset_path('logo_64.png'))
+            self._sidebar_logo = ctk.CTkImage(light_image=_logo_img, dark_image=_logo_img, size=(36, 36))
+        except Exception:
+            self._sidebar_logo = None
+
         title_frame = ctk.CTkFrame(sidebar_outer, fg_color="transparent")
         title_frame.pack(fill="x", padx=S["md"], pady=(S["lg"], S["sm"]))
 
+        if self._sidebar_logo:
+            ctk.CTkLabel(title_frame, image=self._sidebar_logo, text="").pack(side="left", padx=(0, S["sm"]))
         ctk.CTkLabel(
             title_frame, text="FreeClimber",
-            font=(FONT_FAMILY, 20, "bold"), text_color=C["text"], anchor="w",
+            font=F["h1"], text_color=C["text"], anchor="w",
         ).pack(side="left")
         ctk.CTkLabel(
-            title_frame, text="v2.0",
-            font=(FONT_FAMILY, 12), text_color=C["accent"], anchor="w",
+            title_frame, text="v3.0",
+            font=F["caption"], text_color=C["accent"], anchor="w",
         ).pack(side="left", padx=(S["sm"], 0), pady=(4, 0))
 
         ctk.CTkLabel(
             sidebar_outer, text="Drosophila RING Assay Analysis",
-            font=(FONT_FAMILY, 11), text_color=C["text_dim"], anchor="w",
+            font=F["caption"], text_color=C["text_dim"], anchor="w",
         ).pack(fill="x", padx=S["md"], pady=(0, S["md"]))
 
         # Thin accent line
-        ctk.CTkFrame(sidebar_outer, height=2, fg_color=C["accent_muted"]).pack(
+        ctk.CTkFrame(sidebar_outer, height=1, fg_color=C["accent"]).pack(
             fill="x", padx=S["md"], pady=(0, S["sm"]),
         )
 
@@ -387,14 +511,16 @@ class FreeClimberApp(ctk.CTk):
         )
         sidebar.pack(fill="both", expand=True, padx=0, pady=0)
         self.sidebar = sidebar
-        # Ensure scroll starts at top
-        sidebar.after(100, lambda: sidebar._parent_canvas.yview_moveto(0))
+        sidebar._parent_canvas.configure(yscrollincrement=8)
+        sidebar.after(200, lambda: sidebar._parent_canvas.yview_moveto(0))
 
-        # --- VIDEO card ---
-        video_card = CollapsibleCard(sidebar, icon="\u25B6", title="Video")
-        video_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
+        # ============================================================
+        # STEP 1: LOAD VIDEO (always active)
+        # ============================================================
+        self.step1_card = CollapsibleCard(sidebar, icon="\u2460", title="LOAD VIDEO")
+        self.step1_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
 
-        btn_frame = ctk.CTkFrame(video_card.body, fg_color="transparent")
+        btn_frame = ctk.CTkFrame(self.step1_card.body, fg_color="transparent")
         btn_frame.pack(fill="x", pady=(0, S["xs"]))
         ctk.CTkButton(
             btn_frame, text="Open Video\u2026", width=140,
@@ -410,17 +536,20 @@ class FreeClimberApp(ctk.CTk):
         ).pack(side="left")
 
         self.video_label = ctk.CTkLabel(
-            video_card.body, text="No video selected",
+            self.step1_card.body, text="No video selected",
             text_color=C["text_dim"], font=(FONT_FAMILY, 11),
             wraplength=280, anchor="w",
         )
         self.video_label.pack(anchor="w", pady=(S["xs"], 0))
 
-        # --- ROI card ---
-        roi_card = CollapsibleCard(sidebar, icon="\u2B21", title="Region of Interest")
-        roi_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
+        # ============================================================
+        # STEP 2: REGION OF INTEREST (enabled after video)
+        # ============================================================
+        self.step2_card = CollapsibleCard(sidebar, icon="\u2461", title="REGION OF INTEREST")
+        self.step2_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
+        self.step2_card.set_enabled(False)
 
-        roi_grid = ctk.CTkFrame(roi_card.body, fg_color="transparent")
+        roi_grid = ctk.CTkFrame(self.step2_card.body, fg_color="transparent")
         roi_grid.pack(fill="x", pady=(0, S["xs"]))
         self.roi_x = self._labeled_entry(roi_grid, "X", "0", row=0, col=0)
         self.roi_y = self._labeled_entry(roi_grid, "Y", "0", row=0, col=2)
@@ -429,24 +558,27 @@ class FreeClimberApp(ctk.CTk):
 
         self.fixed_roi_var = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
-            roi_card.body, text="Fixed ROI dimensions", variable=self.fixed_roi_var,
+            self.step2_card.body, text="Fixed ROI dimensions", variable=self.fixed_roi_var,
             font=(FONT_FAMILY, 12), text_color=C["text"],
             fg_color=C["accent"], hover_color=C["accent_hover"],
             border_color=C["border"],
         ).pack(anchor="w", pady=(S["xs"], 0))
 
-        # --- DETECTION card ---
-        det_card = CollapsibleCard(sidebar, icon="\u25C9", title="Detection", initially_open=True)
-        det_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
+        # ============================================================
+        # STEP 3: DETECTION (enabled after ROI)
+        # ============================================================
+        self.step3_card = CollapsibleCard(sidebar, icon="\u2462", title="DETECTION")
+        self.step3_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
+        self.step3_card.set_enabled(False)
 
-        self.sl_diameter = ParameterSlider(det_card.body, "Diameter", 3, 31, 7, int, TOOLTIPS['diameter'])
+        self.sl_diameter = ParameterSlider(self.step3_card.body, "Diameter", 3, 31, 7, int, TOOLTIPS['diameter'])
         self.sl_diameter.pack(fill="x", pady=S["xs"])
-        self.sl_minmass = ParameterSlider(det_card.body, "Min Mass", 0, 5000, 100, int, TOOLTIPS['minmass'])
+        self.sl_minmass = ParameterSlider(self.step3_card.body, "Min Mass", 0, 5000, 100, int, TOOLTIPS['minmass'])
         self.sl_minmass.pack(fill="x", pady=S["xs"])
-        self.sl_maxsize = ParameterSlider(det_card.body, "Max Size", 1, 50, 11, int, TOOLTIPS['maxsize'])
+        self.sl_maxsize = ParameterSlider(self.step3_card.body, "Max Size", 1, 50, 11, int, TOOLTIPS['maxsize'])
         self.sl_maxsize.pack(fill="x", pady=S["xs"])
 
-        th_frame = ctk.CTkFrame(det_card.body, fg_color="transparent")
+        th_frame = ctk.CTkFrame(self.step3_card.body, fg_color="transparent")
         th_frame.pack(fill="x", pady=S["xs"])
         th_frame.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(
@@ -467,36 +599,43 @@ class FreeClimberApp(ctk.CTk):
         info.grid(row=0, column=2, padx=(S["xs"], 0))
         ToolTip(info, TOOLTIPS['threshold'])
 
-        self.sl_ecc_low = ParameterSlider(det_card.body, "Ecc Low", 0, 1, 0, float, TOOLTIPS['ecc_low'])
+        self.sl_ecc_low = ParameterSlider(self.step3_card.body, "Ecc Low", 0, 1, 0, float, TOOLTIPS['ecc_low'])
         self.sl_ecc_low.pack(fill="x", pady=S["xs"])
-        self.sl_ecc_high = ParameterSlider(det_card.body, "Ecc High", 0, 1, 1, float, TOOLTIPS['ecc_high'])
+        self.sl_ecc_high = ParameterSlider(self.step3_card.body, "Ecc High", 0, 1, 1, float, TOOLTIPS['ecc_high'])
         self.sl_ecc_high.pack(fill="x", pady=S["xs"])
 
-        # --- EXPERIMENT card ---
-        exp_card = CollapsibleCard(sidebar, icon="\u2699", title="Experiment", initially_open=False)
-        exp_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
+        # Preview button inside Detection step
+        ctk.CTkButton(
+            self.step3_card.body, text="PREVIEW", width=280,
+            fg_color="transparent", hover_color=C["accent_muted"],
+            text_color=C["accent"], border_color=C["accent"], border_width=1,
+            corner_radius=8, font=F["body_b"], command=self._test_parameters,
+        ).pack(fill="x", pady=(S["sm"], S["xs"]))
 
-        bg_frame = ctk.CTkFrame(exp_card.body, fg_color="transparent")
-        bg_frame.pack(fill="x", pady=S["xs"])
-        ctk.CTkLabel(
-            bg_frame, text="Background", width=100, anchor="w",
-            font=(FONT_FAMILY, 13), text_color=C["text"],
-        ).pack(side="left")
-        self.bg_method_var = ctk.StringVar(value="temporal_median")
-        ctk.CTkOptionMenu(
-            bg_frame, variable=self.bg_method_var, width=150,
-            values=["temporal_median", "mog2", "running_avg"],
-            fg_color=C["bg_input"], button_color=C["accent"],
-            button_hover_color=C["accent_hover"],
-            font=(FONT_FAMILY, 12),
-        ).pack(side="left", padx=(S["sm"], 0))
+        # ============================================================
+        # STEP 4: ANALYZE (enabled after preview)
+        # ============================================================
+        self.step4_card = CollapsibleCard(sidebar, icon="\u2463", title="ANALYZE")
+        self.step4_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
+        self.step4_card.set_enabled(False)
 
-        self.sl_vials = ParameterSlider(exp_card.body, "Vials", 1, 20, 3, int, TOOLTIPS['vials'])
-        self.sl_vials.pack(fill="x", pady=S["xs"])
-        self.sl_window = ParameterSlider(exp_card.body, "Window", 5, 500, 50, int, TOOLTIPS['window'])
+        # Vials + Groups
+        vial_frame = ctk.CTkFrame(self.step4_card.body, fg_color="transparent")
+        vial_frame.pack(fill="x", pady=S["xs"])
+        self.sl_vials = ParameterSlider(vial_frame, "Vials", 1, 20, 3, int, TOOLTIPS['vials'])
+        self.sl_vials.pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(
+            vial_frame, text="Groups", width=60,
+            fg_color=C["bg_hover"], hover_color=C["accent_muted"],
+            text_color=C["accent"], corner_radius=6,
+            font=(FONT_FAMILY, 11), command=self._show_vial_grouping_dialog,
+        ).pack(side="right", padx=(S["xs"], 0))
+
+        self.sl_window = ParameterSlider(self.step4_card.body, "Window", 5, 500, 50, int, TOOLTIPS['window'])
         self.sl_window.pack(fill="x", pady=S["xs"])
 
-        fr_frame = ctk.CTkFrame(exp_card.body, fg_color="transparent")
+        # Frame rate
+        fr_frame = ctk.CTkFrame(self.step4_card.body, fg_color="transparent")
         fr_frame.pack(fill="x", pady=S["xs"])
         ctk.CTkLabel(
             fr_frame, text="Frame Rate", width=100, anchor="w",
@@ -514,7 +653,73 @@ class FreeClimberApp(ctk.CTk):
             font=(FONT_FAMILY, 11),
         ).pack(side="left")
 
-        px_frame = ctk.CTkFrame(exp_card.body, fg_color="transparent")
+        # Crop range (essential for every analysis)
+        self.sl_crop_0 = ParameterSlider(self.step4_card.body, "Crop Start", 0, 10000, 0, int, TOOLTIPS['crop_0'])
+        self.sl_crop_0.pack(fill="x", pady=S["xs"])
+        self.sl_crop_n = ParameterSlider(self.step4_card.body, "Crop End", 0, 10000, 145, int, TOOLTIPS['crop_n'])
+        self.sl_crop_n.pack(fill="x", pady=S["xs"])
+
+        # RUN button — green (semantic: go/execute)
+        run_wrapper = ctk.CTkFrame(self.step4_card.body, fg_color=C["run"], corner_radius=10)
+        run_wrapper.pack(fill="x", pady=(S["sm"], S["xs"]))
+        ctk.CTkFrame(
+            run_wrapper, height=2, fg_color=C["run_hover"], corner_radius=0,
+        ).pack(fill="x")
+        self.run_btn = ctk.CTkButton(
+            run_wrapper, text="RUN ANALYSIS", height=44,
+            font=F["h2"],
+            fg_color=C["run"], hover_color=C["run_hover"],
+            text_color=C["text_on_accent"], corner_radius=8,
+            command=self._run_analysis,
+        )
+        self.run_btn.pack(fill="x", padx=2, pady=(0, 2))
+
+        # Secondary action buttons
+        btn_row = ctk.CTkFrame(self.step4_card.body, fg_color="transparent")
+        btn_row.pack(fill="x", pady=(0, S["xs"]))
+        ctk.CTkButton(
+            btn_row, text="Batch Mode", width=90,
+            fg_color="transparent", hover_color=C["accent_muted"],
+            text_color=C["accent"], border_color=C["accent"], border_width=1,
+            corner_radius=8, font=(FONT_FAMILY, 11), command=self._batch_mode,
+        ).pack(side="left", padx=(0, S["xs"]))
+        ctk.CTkButton(
+            btn_row, text="Save Config", width=85,
+            fg_color=C["bg_hover"], hover_color=C["border"],
+            text_color=C["text"], corner_radius=8,
+            font=(FONT_FAMILY, 11), command=self._save_config,
+        ).pack(side="left", padx=(0, S["xs"]))
+        ctk.CTkButton(
+            btn_row, text="Copy Methods", width=90,
+            fg_color=C["bg_hover"], hover_color=C["border"],
+            text_color=C["text"], corner_radius=8,
+            font=(FONT_FAMILY, 11), command=self._copy_methods,
+        ).pack(side="left")
+
+        # ============================================================
+        # ADVANCED SETTINGS (collapsed)
+        # ============================================================
+        adv_card = CollapsibleCard(sidebar, icon="\u2699", title="Advanced Settings", initially_open=False)
+        adv_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
+
+        # Background method
+        bg_frame = ctk.CTkFrame(adv_card.body, fg_color="transparent")
+        bg_frame.pack(fill="x", pady=S["xs"])
+        ctk.CTkLabel(
+            bg_frame, text="Background", width=100, anchor="w",
+            font=(FONT_FAMILY, 13), text_color=C["text"],
+        ).pack(side="left")
+        self.bg_method_var = ctk.StringVar(value="temporal_median")
+        ctk.CTkOptionMenu(
+            bg_frame, variable=self.bg_method_var, width=150,
+            values=["temporal_median", "mog2", "running_avg"],
+            fg_color=C["bg_input"], button_color=C["accent"],
+            button_hover_color=C["accent_hover"],
+            font=(FONT_FAMILY, 12),
+        ).pack(side="left", padx=(S["sm"], 0))
+
+        # Pixel/cm
+        px_frame = ctk.CTkFrame(adv_card.body, fg_color="transparent")
         px_frame.pack(fill="x", pady=S["xs"])
         ctk.CTkLabel(
             px_frame, text="Pixel/cm", width=100, anchor="w",
@@ -528,8 +733,9 @@ class FreeClimberApp(ctk.CTk):
         self.pixel_cm_entry.pack(side="left", padx=(S["sm"], 0))
         self.pixel_cm_entry.insert(0, "1")
 
-        check_frame = ctk.CTkFrame(exp_card.body, fg_color="transparent")
-        check_frame.pack(fill="x", pady=(S["sm"], 0))
+        # Checkboxes
+        check_frame = ctk.CTkFrame(adv_card.body, fg_color="transparent")
+        check_frame.pack(fill="x", pady=(S["xs"], 0))
         self.convert_cm_var = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
             check_frame, text="Convert to cm/sec", variable=self.convert_cm_var,
@@ -545,38 +751,23 @@ class FreeClimberApp(ctk.CTk):
             border_color=C["border"],
         ).pack(anchor="w", pady=2)
         self.tracking_var = ctk.BooleanVar(value=True)
-        ctk.CTkCheckBox(
-            check_frame, text="Individual fly tracking", variable=self.tracking_var,
-            font=(FONT_FAMILY, 12), text_color=C["text"],
-            fg_color=C["accent"], hover_color=C["accent_hover"],
-            border_color=C["border"],
-        ).pack(anchor="w", pady=2)
 
-        # --- FRAMES card ---
-        frames_card = CollapsibleCard(sidebar, icon="\u25A4", title="Frames", initially_open=False)
-        frames_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
-
-        self.sl_blank_0 = ParameterSlider(frames_card.body, "Blank Start", 0, 10000, 0, int, TOOLTIPS['blank_0'])
+        # Blank frames
+        self.sl_blank_0 = ParameterSlider(adv_card.body, "Blank Start", 0, 10000, 0, int, TOOLTIPS['blank_0'])
         self.sl_blank_0.pack(fill="x", pady=S["xs"])
-        self.sl_blank_n = ParameterSlider(frames_card.body, "Blank End", 0, 10000, 145, int, TOOLTIPS['blank_n'])
+        self.sl_blank_n = ParameterSlider(adv_card.body, "Blank End", 0, 10000, 145, int, TOOLTIPS['blank_n'])
         self.sl_blank_n.pack(fill="x", pady=S["xs"])
-        self.sl_crop_0 = ParameterSlider(frames_card.body, "Crop Start", 0, 10000, 0, int, TOOLTIPS['crop_0'])
-        self.sl_crop_0.pack(fill="x", pady=S["xs"])
-        self.sl_crop_n = ParameterSlider(frames_card.body, "Crop End", 0, 10000, 145, int, TOOLTIPS['crop_n'])
-        self.sl_crop_n.pack(fill="x", pady=S["xs"])
-        self.sl_check = ParameterSlider(frames_card.body, "Check Frame", 0, 10000, 0, int, TOOLTIPS['check_frame'])
+        self.sl_check = ParameterSlider(adv_card.body, "Check Frame", 0, 10000, 0, int, TOOLTIPS['check_frame'])
         self.sl_check.pack(fill="x", pady=S["xs"])
 
-        self.sl_outlier_tb = ParameterSlider(frames_card.body, "Outlier TB", 0, 20, 1, float, TOOLTIPS['outlier_TB'])
+        # Outlier trim
+        self.sl_outlier_tb = ParameterSlider(adv_card.body, "Outlier TB", 0, 20, 1, float, TOOLTIPS['outlier_TB'])
         self.sl_outlier_tb.pack(fill="x", pady=S["xs"])
-        self.sl_outlier_lr = ParameterSlider(frames_card.body, "Outlier LR", 0, 20, 3, float, TOOLTIPS['outlier_LR'])
+        self.sl_outlier_lr = ParameterSlider(adv_card.body, "Outlier LR", 0, 20, 3, float, TOOLTIPS['outlier_LR'])
         self.sl_outlier_lr.pack(fill="x", pady=S["xs"])
 
-        # --- NAMING card ---
-        naming_card = CollapsibleCard(sidebar, icon="\u270E", title="Naming", initially_open=False)
-        naming_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
-
-        nc_frame = ctk.CTkFrame(naming_card.body, fg_color="transparent")
+        # Naming
+        nc_frame = ctk.CTkFrame(adv_card.body, fg_color="transparent")
         nc_frame.pack(fill="x", pady=S["xs"])
         ctk.CTkLabel(
             nc_frame, text="Convention", width=100, anchor="w",
@@ -588,7 +779,7 @@ class FreeClimberApp(ctk.CTk):
         )
         self.naming_entry.pack(side="left", padx=(S["sm"], 0))
 
-        vid_frame = ctk.CTkFrame(naming_card.body, fg_color="transparent")
+        vid_frame = ctk.CTkFrame(adv_card.body, fg_color="transparent")
         vid_frame.pack(fill="x", pady=S["xs"])
         ctk.CTkLabel(
             vid_frame, text="Vial ID vars", width=100, anchor="w",
@@ -602,7 +793,7 @@ class FreeClimberApp(ctk.CTk):
         self.vial_id_entry.pack(side="left", padx=(S["sm"], 0))
         self.vial_id_entry.insert(0, "2")
 
-        proj_frame = ctk.CTkFrame(naming_card.body, fg_color="transparent")
+        proj_frame = ctk.CTkFrame(adv_card.body, fg_color="transparent")
         proj_frame.pack(fill="x", pady=S["xs"])
         ctk.CTkLabel(
             proj_frame, text="Project Path", width=100, anchor="w",
@@ -614,8 +805,10 @@ class FreeClimberApp(ctk.CTk):
         )
         self.project_entry.pack(side="left", padx=(S["sm"], 0))
 
-        # --- PROFILES card ---
-        prof_card = CollapsibleCard(sidebar, icon="\u2606", title="Profiles", initially_open=False)
+        # ============================================================
+        # PROFILES (collapsed)
+        # ============================================================
+        prof_card = CollapsibleCard(sidebar, icon="P", title="Profiles", initially_open=False)
         prof_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
 
         prof_frame = ctk.CTkFrame(prof_card.body, fg_color="transparent")
@@ -642,68 +835,23 @@ class FreeClimberApp(ctk.CTk):
             font=(FONT_FAMILY, 12), command=self._delete_profile,
         ).pack(side="left")
 
-        # --- ACTION BUTTONS (fixed at bottom of sidebar) ---
+        # ============================================================
+        # PROGRESS (bottom of sidebar)
+        # ============================================================
         action_area = ctk.CTkFrame(sidebar_outer, fg_color=C["bg_panel"])
         action_area.pack(side="bottom", fill="x", padx=0, pady=0)
-
         ctk.CTkFrame(action_area, height=1, fg_color=C["border"]).pack(fill="x")
 
-        action_pad = ctk.CTkFrame(action_area, fg_color="transparent")
-        action_pad.pack(fill="x", padx=S["md"], pady=S["md"])
-
-        btn_row1 = ctk.CTkFrame(action_pad, fg_color="transparent")
-        btn_row1.pack(fill="x", pady=(0, S["sm"]))
-        ctk.CTkButton(
-            btn_row1, text="Preview", width=140,
-            fg_color=C["bg_hover"], hover_color=C["accent_muted"],
-            text_color=C["text"], corner_radius=8,
-            font=(FONT_FAMILY, 13), command=self._test_parameters,
-        ).pack(side="left", padx=(0, S["sm"]))
-        ctk.CTkButton(
-            btn_row1, text="Save Config", width=100,
-            fg_color=C["bg_hover"], hover_color=C["border"],
-            text_color=C["text"], corner_radius=8,
-            font=(FONT_FAMILY, 13), command=self._save_config,
-        ).pack(side="left")
-
-        btn_row2 = ctk.CTkFrame(action_pad, fg_color="transparent")
-        btn_row2.pack(fill="x", pady=(0, S["md"]))
-        ctk.CTkButton(
-            btn_row2, text="Batch Mode", width=140,
-            fg_color=C["bg_hover"], hover_color=C["accent_muted"],
-            text_color=C["text"], corner_radius=8,
-            font=(FONT_FAMILY, 13), command=self._batch_mode,
-        ).pack(side="left", padx=(0, S["sm"]))
-        ctk.CTkButton(
-            btn_row2, text="Copy Methods", width=100,
-            fg_color=C["bg_hover"], hover_color=C["border"],
-            text_color=C["text"], corner_radius=8,
-            font=(FONT_FAMILY, 13), command=self._copy_methods,
-        ).pack(side="left")
-
-        # Run button with highlight effect
-        run_wrapper = ctk.CTkFrame(action_pad, fg_color=C["danger"], corner_radius=10)
-        run_wrapper.pack(fill="x")
-        # Top highlight bar for faux gradient
-        ctk.CTkFrame(
-            run_wrapper, height=2, fg_color=C["danger_hover"], corner_radius=0,
-        ).pack(fill="x")
-        self.run_btn = ctk.CTkButton(
-            run_wrapper, text="RUN ANALYSIS", height=44,
-            font=(FONT_FAMILY, 15, "bold"),
-            fg_color=C["danger"], hover_color=C["danger_hover"],
-            text_color="#ffffff", corner_radius=8,
-            command=self._run_analysis,
-        )
-        self.run_btn.pack(fill="x", padx=2, pady=(0, 2))
+        progress_pad = ctk.CTkFrame(action_area, fg_color="transparent")
+        progress_pad.pack(fill="x", padx=S["md"], pady=S["sm"])
 
         self.progress_label = ctk.CTkLabel(
-            action_pad, text="", text_color=C["text_dim"],
+            progress_pad, text="", text_color=C["text_dim"],
             font=(FONT_FAMILY, 11),
         )
-        self.progress_label.pack(anchor="w", pady=(S["sm"], 0))
+        self.progress_label.pack(anchor="w")
         self.progress_bar = ctk.CTkProgressBar(
-            action_pad, height=6, corner_radius=3,
+            progress_pad, height=6, corner_radius=3,
             fg_color=C["border"], progress_color=C["accent"],
         )
         self.progress_bar.pack(fill="x", pady=(S["xs"], 0))
@@ -723,28 +871,34 @@ class FreeClimberApp(ctk.CTk):
         empty_inner = ctk.CTkFrame(self.empty_state, fg_color="transparent")
         empty_inner.place(relx=0.5, rely=0.45, anchor="center")
 
-        ctk.CTkLabel(
-            empty_inner, text="\U0001F3AC",
-            font=(FONT_FAMILY, 64), text_color=C["text_dim"],
-        ).pack(pady=(0, S["md"]))
-        ctk.CTkLabel(
-            empty_inner, text="Drop a video here",
-            font=(FONT_FAMILY, 22, "bold"), text_color=C["text"],
-        ).pack()
-        ctk.CTkLabel(
-            empty_inner, text="or",
-            font=(FONT_FAMILY, 13), text_color=C["text_dim"],
-        ).pack(pady=S["sm"])
-        ctk.CTkButton(
-            empty_inner, text="Open Video", width=160, height=40,
+        # Logo
+        try:
+            _logo_lg = Image.open(_asset_path('logo_256.png'))
+            self._empty_logo = ctk.CTkImage(light_image=_logo_lg, dark_image=_logo_lg, size=(80, 80))
+            ctk.CTkLabel(empty_inner, image=self._empty_logo, text="").pack(pady=(0, S["lg"]))
+        except Exception:
+            pass
+
+        ctk.CTkLabel(empty_inner, text="FreeClimber", font=F["h1"], text_color=C["text"]).pack()
+        ctk.CTkLabel(empty_inner, text="Drosophila RING Assay Analysis",
+            font=F["caption"], text_color=C["text_dim"]).pack(pady=(S["xs"], S["xl"]))
+
+        # Drop zone card
+        drop_zone = ctk.CTkFrame(empty_inner, fg_color=C["bg_card"], corner_radius=12,
+            border_width=2, border_color=C["border"], width=320, height=110)
+        drop_zone.pack(pady=(0, S["md"]))
+        drop_zone.pack_propagate(False)
+        dz_inner = ctk.CTkFrame(drop_zone, fg_color="transparent")
+        dz_inner.place(relx=0.5, rely=0.5, anchor="center")
+        ctk.CTkLabel(dz_inner, text="Drop a video here or", font=F["body"],
+            text_color=C["text_dim"]).pack()
+        ctk.CTkButton(dz_inner, text="Open Video", width=140, height=36,
             fg_color=C["accent"], hover_color=C["accent_hover"],
-            text_color=C["bg"], font=(FONT_FAMILY, 14, "bold"),
-            corner_radius=10, command=self._browse_video,
-        ).pack()
-        ctk.CTkLabel(
-            empty_inner, text="\u2318O to open  \u00b7  \u2318R to run  \u00b7  \u2318T to preview",
-            font=(FONT_FAMILY, 11), text_color=C["text_disabled"],
-        ).pack(pady=(S["lg"], 0))
+            text_color=C["bg"], font=F["body_b"], corner_radius=8,
+            command=self._browse_video).pack(pady=(S["sm"], 0))
+
+        ctk.CTkLabel(empty_inner, text="Cmd+O open  \u00b7  Cmd+R run  \u00b7  Cmd+T preview",
+            font=F["caption"], text_color=C["text_disabled"]).pack(pady=(S["lg"], 0))
 
         # Tab view (hidden until video loaded)
         self.tabview = ctk.CTkTabview(
@@ -760,6 +914,7 @@ class FreeClimberApp(ctk.CTk):
         self._build_diagnostics_tab()
         self._build_results_tab()
         self._build_statistics_tab()
+        self._bind_all_context_menus()
 
     def _show_tabs(self):
         self.empty_state.grid_forget()
@@ -774,14 +929,14 @@ class FreeClimberApp(ctk.CTk):
         self.setup_canvas = FigureCanvasTkAgg(self.setup_fig, master=tab)
         self.setup_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
 
-        toolbar_frame = ctk.CTkFrame(tab, fg_color="transparent", height=30)
-        toolbar_frame.grid(row=1, column=0, sticky="ew")
-        self.setup_toolbar = NavigationToolbar2Tk(self.setup_canvas, toolbar_frame)
-        self.setup_toolbar.update()
+        self.setup_toolbar = PlotToolbar(tab, self.setup_canvas, self.setup_fig,
+            save_callback=lambda: self._save_figure_dialog(self.setup_fig))
+        self.setup_toolbar.grid(row=1, column=0, sticky="ew")
 
         self.setup_canvas.mpl_connect('button_press_event', self._roi_press_event)
         self.setup_canvas.mpl_connect('button_release_event', self._roi_release_event)
         self.setup_canvas.mpl_connect('motion_notify_event', self._roi_motion_event)
+        self._plot_empty_placeholder(self.setup_fig, self.setup_canvas)
 
     def _build_diagnostics_tab(self):
         tab = self.tabview.add("Diagnostics")
@@ -792,9 +947,9 @@ class FreeClimberApp(ctk.CTk):
         self.diag_canvas = FigureCanvasTkAgg(self.diag_fig, master=tab)
         self.diag_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
 
-        toolbar_frame = ctk.CTkFrame(tab, fg_color="transparent", height=30)
-        toolbar_frame.grid(row=1, column=0, sticky="ew")
-        NavigationToolbar2Tk(self.diag_canvas, toolbar_frame).update()
+        PlotToolbar(tab, self.diag_canvas, self.diag_fig,
+            save_callback=lambda: self._save_figure_dialog(self.diag_fig)).grid(row=1, column=0, sticky="ew")
+        self._plot_empty_placeholder(self.diag_fig, self.diag_canvas)
 
     def _build_results_tab(self):
         tab = self.tabview.add("Results")
@@ -803,14 +958,21 @@ class FreeClimberApp(ctk.CTk):
         tab.grid_columnconfigure(0, weight=1)
 
         # --- Summary card at top ---
-        self.summary_frame = ctk.CTkFrame(tab, fg_color=C["bg_card"], corner_radius=8, height=60)
+        self.summary_frame = ctk.CTkFrame(tab, fg_color=C["bg_card"], corner_radius=8)
         self.summary_frame.grid(row=0, column=0, sticky="ew", padx=S["xs"], pady=(S["xs"], S["xs"]))
-        self.summary_frame.grid_propagate(False)
+        summary_inner = ctk.CTkFrame(self.summary_frame, fg_color="transparent")
+        summary_inner.pack(fill="x", padx=S["md"], pady=S["sm"])
         self.summary_label = ctk.CTkLabel(
-            self.summary_frame, text="Run an analysis to see results here.",
+            summary_inner, text="Run an analysis to see results here.",
             font=(FONT_FAMILY, 12), text_color=C["text_dim"], anchor="w",
         )
-        self.summary_label.pack(fill="x", padx=S["md"], pady=S["sm"])
+        self.summary_label.pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(
+            summary_inner, text="Export\u2026", width=80,
+            fg_color=C["accent"], hover_color=C["accent_hover"],
+            text_color=C["bg"], font=(FONT_FAMILY, 12, "bold"),
+            corner_radius=6, command=self._export_dialog,
+        ).pack(side="right", padx=(S["sm"], 0))
 
         # --- Data table section with sub-tabs ---
         table_outer = ctk.CTkFrame(tab, fg_color=C["bg_card"], corner_radius=8)
@@ -839,6 +1001,7 @@ class FreeClimberApp(ctk.CTk):
         scrollbar = tk.ttk.Scrollbar(slopes_tab, orient="vertical", command=self.slopes_tree.yview)
         scrollbar.grid(row=0, column=1, sticky="ns")
         self.slopes_tree.configure(yscrollcommand=scrollbar.set)
+        self.slopes_tree.bind("<Command-c>", lambda e: self._copy_tree_to_clipboard(self.slopes_tree))
 
         # Per-fly metrics table (populated when individual tracking is on)
         perfly_tab = self.data_tabview.add("Per-Fly Metrics")
@@ -849,13 +1012,14 @@ class FreeClimberApp(ctk.CTk):
         perfly_scroll = tk.ttk.Scrollbar(perfly_tab, orient="vertical", command=self.perfly_tree.yview)
         perfly_scroll.grid(row=0, column=1, sticky="ns")
         self.perfly_tree.configure(yscrollcommand=perfly_scroll.set)
+        self.perfly_tree.bind("<Command-c>", lambda e: self._copy_tree_to_clipboard(self.perfly_tree))
 
         # Population stats table
         pop_tab = self.data_tabview.add("Population Stats")
         pop_tab.grid_rowconfigure(0, weight=1)
         pop_tab.grid_columnconfigure(0, weight=1)
         self.pop_stats_text = ctk.CTkTextbox(
-            pop_tab, font=("Menlo", 11), state="disabled", wrap="word",
+            pop_tab, font=F["mono"], state="disabled", wrap="word",
             fg_color=C["bg_card"], text_color=C["text"],
         )
         self.pop_stats_text.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
@@ -877,87 +1041,158 @@ class FreeClimberApp(ctk.CTk):
         )
         self.results_plot_tabview.grid(row=0, column=0, sticky="nsew")
 
-        speed_tab = self.results_plot_tabview.add("Speed")
-        speed_tab.grid_rowconfigure(0, weight=1)
-        speed_tab.grid_columnconfigure(0, weight=1)
-        self.speed_fig = Figure(figsize=(6, 3), dpi=100)
-        self.speed_canvas = FigureCanvasTkAgg(self.speed_fig, master=speed_tab)
-        self.speed_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+        # --- Lazy figure creation for plot tabs ---
+        self._result_figs = {}
+        self._result_tab_widgets = {}
+        self._pending_draws = {}
 
-        traj_tab = self.results_plot_tabview.add("Trajectories")
-        traj_tab.grid_rowconfigure(0, weight=1)
-        traj_tab.grid_columnconfigure(0, weight=1)
-        self.traj_fig = Figure(figsize=(6, 3), dpi=100)
-        self.traj_canvas = FigureCanvasTkAgg(self.traj_fig, master=traj_tab)
-        self.traj_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+        for name in ["Overview", "Trajectories", "Individual Flies", "Raincloud"]:
+            tab = self.results_plot_tabview.add(name)
+            tab.grid_rowconfigure(0, weight=1)
+            tab.grid_columnconfigure(0, weight=1)
+            ctk.CTkLabel(tab, text="Run analysis to see results",
+                         text_color=C["text_dim"], font=F["caption"]).grid(row=0, column=0)
+            self._result_tab_widgets[name] = tab
 
-        dist_tab = self.results_plot_tabview.add("Distribution")
-        dist_tab.grid_rowconfigure(0, weight=1)
-        dist_tab.grid_columnconfigure(0, weight=1)
-        self.dist_fig = Figure(figsize=(6, 3), dpi=100)
-        self.dist_canvas = FigureCanvasTkAgg(self.dist_fig, master=dist_tab)
-        self.dist_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+        # Individual Flies sub-tabs are created lazily too
+        self.individual_subtabs = None
+        self._individual_sub_widgets = {}
 
-        raincloud_tab = self.results_plot_tabview.add("Raincloud")
-        raincloud_tab.grid_rowconfigure(0, weight=1)
-        raincloud_tab.grid_columnconfigure(0, weight=1)
-        self.raincloud_fig = Figure(figsize=(6, 3), dpi=100)
-        self.raincloud_canvas = FigureCanvasTkAgg(self.raincloud_fig, master=raincloud_tab)
-        self.raincloud_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+        # Initialize figure attributes as None (created on first use)
+        self.overview_fig = self.overview_canvas = None
+        self.traj_fig = self.traj_canvas = None
+        self.overlay_fig = self.overlay_canvas = None
+        self.heatmap_fig = self.heatmap_canvas = None
+        self.speed_curves_fig = self.speed_curves_canvas = None
+        self.raincloud_fig = self.raincloud_canvas = None
 
-        perfly_plot_tab = self.results_plot_tabview.add("Per-Fly")
-        perfly_plot_tab.grid_rowconfigure(0, weight=1)
-        perfly_plot_tab.grid_columnconfigure(0, weight=1)
-        self.perfly_fig = Figure(figsize=(6, 3), dpi=100)
-        self.perfly_canvas = FigureCanvasTkAgg(self.perfly_fig, master=perfly_plot_tab)
-        self.perfly_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
-
-        heatmap_tab = self.results_plot_tabview.add("Heatmap")
-        heatmap_tab.grid_rowconfigure(0, weight=1)
-        heatmap_tab.grid_columnconfigure(0, weight=1)
-        self.heatmap_fig = Figure(figsize=(6, 3), dpi=100)
-        self.heatmap_canvas = FigureCanvasTkAgg(self.heatmap_fig, master=heatmap_tab)
-        self.heatmap_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
-
-        speed_curves_tab = self.results_plot_tabview.add("Speed Curves")
-        speed_curves_tab.grid_rowconfigure(0, weight=1)
-        speed_curves_tab.grid_columnconfigure(0, weight=1)
-        self.speed_curves_fig = Figure(figsize=(6, 3), dpi=100)
-        self.speed_curves_canvas = FigureCanvasTkAgg(self.speed_curves_fig, master=speed_curves_tab)
-        self.speed_curves_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+        # Tab-change callback for deferred drawing
+        self.results_plot_tabview.configure(command=self._on_result_tab_changed)
 
     def _build_statistics_tab(self):
         tab = self.tabview.add("Statistics")
-        tab.grid_rowconfigure(0, weight=4)
-        tab.grid_rowconfigure(1, weight=3)
+        tab.grid_rowconfigure(0, weight=0)
+        tab.grid_rowconfigure(1, weight=4)
         tab.grid_rowconfigure(2, weight=3)
+        tab.grid_rowconfigure(3, weight=3)
         tab.grid_columnconfigure(0, weight=1)
 
-        # Raincloud plot at top
-        stats_plot_frame = ctk.CTkFrame(tab, fg_color=C["bg_card"], corner_radius=8)
-        stats_plot_frame.grid(row=0, column=0, sticky="nsew", padx=S["xs"], pady=(S["xs"], S["xs"]))
-        stats_plot_frame.grid_rowconfigure(0, weight=1)
-        stats_plot_frame.grid_columnconfigure(0, weight=1)
-        self.stats_fig = Figure(figsize=(6, 3), dpi=100)
-        self.stats_canvas = FigureCanvasTkAgg(self.stats_fig, master=stats_plot_frame)
-        self.stats_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+        # Stats control bar at top
+        self._build_stats_controls(tab)
 
-        # CDF plot in middle
-        cdf_frame = ctk.CTkFrame(tab, fg_color=C["bg_card"], corner_radius=8)
-        cdf_frame.grid(row=1, column=0, sticky="nsew", padx=S["xs"], pady=(0, S["xs"]))
-        cdf_frame.grid_rowconfigure(0, weight=1)
-        cdf_frame.grid_columnconfigure(0, weight=1)
-        self.cdf_fig = Figure(figsize=(6, 2.5), dpi=100)
-        self.cdf_canvas = FigureCanvasTkAgg(self.cdf_fig, master=cdf_frame)
-        self.cdf_canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+        # Raincloud plot (lazy)
+        self._stats_plot_frame = ctk.CTkFrame(tab, fg_color=C["bg_card"], corner_radius=8)
+        self._stats_plot_frame.grid(row=1, column=0, sticky="nsew", padx=S["xs"], pady=(S["xs"], S["xs"]))
+        self._stats_plot_frame.grid_rowconfigure(0, weight=1)
+        self._stats_plot_frame.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(self._stats_plot_frame, text="Run analysis to see statistics",
+                     text_color=C["text_dim"], font=F["caption"]).grid(row=0, column=0)
+        self.stats_fig = self.stats_canvas = None
+
+        # CDF plot (lazy)
+        self._cdf_frame = ctk.CTkFrame(tab, fg_color=C["bg_card"], corner_radius=8)
+        self._cdf_frame.grid(row=2, column=0, sticky="nsew", padx=S["xs"], pady=(0, S["xs"]))
+        self._cdf_frame.grid_rowconfigure(0, weight=1)
+        self._cdf_frame.grid_rowconfigure(1, weight=0)
+        self._cdf_frame.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(self._cdf_frame, text="Run analysis to see CDF",
+                     text_color=C["text_dim"], font=F["caption"]).grid(row=0, column=0)
+        self.cdf_fig = self.cdf_canvas = None
 
         # Formatted text at bottom
         self.stats_text = ctk.CTkTextbox(
-            tab, font=("Menlo", 11), state="disabled", wrap="word",
+            tab, font=F["mono"], state="disabled", wrap="word",
             fg_color=C["bg_card"], text_color=C["text"],
         )
-        self.stats_text.grid(row=2, column=0, sticky="nsew", padx=S["xs"], pady=S["xs"])
+        self.stats_text.grid(row=3, column=0, sticky="nsew", padx=S["xs"], pady=S["xs"])
         self._set_stats_text("Run an analysis to see statistics here.")
+
+    # ------------------------------------------------------------------
+    # Plot empty placeholder
+    # ------------------------------------------------------------------
+    def _plot_empty_placeholder(self, fig, canvas):
+        fig.clear()
+        ax = fig.add_subplot(111)
+        ax.text(0.5, 0.5, "Run analysis to see results", transform=ax.transAxes,
+            ha='center', va='center', fontsize=11, color=C["text_disabled"])
+        ax.axis('off')
+        fig.patch.set_facecolor(C["bg"])
+        ax.set_facecolor(C["bg"])
+        canvas.draw()
+
+    # ------------------------------------------------------------------
+    # Lazy figure creation
+    # ------------------------------------------------------------------
+    def _ensure_fig(self, attr_name, parent_widget, figsize=(8, 4)):
+        """Create figure/canvas/toolbar on first use. Returns (fig, canvas)."""
+        fig = getattr(self, attr_name + '_fig', None)
+        if fig is not None:
+            return fig, getattr(self, attr_name + '_canvas')
+
+        for child in parent_widget.winfo_children():
+            child.destroy()
+
+        parent_widget.grid_rowconfigure(0, weight=1)
+        parent_widget.grid_rowconfigure(1, weight=0)
+        parent_widget.grid_columnconfigure(0, weight=1)
+
+        fig = Figure(figsize=figsize, dpi=100)
+        fig.set_facecolor(C["bg"])
+        canvas = FigureCanvasTkAgg(fig, master=parent_widget)
+        canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+
+        PlotToolbar(parent_widget, canvas, fig,
+            save_callback=lambda f=fig: self._save_figure_dialog(f)).grid(row=1, column=0, sticky="ew")
+
+        self._bind_plot_context_menu(canvas, fig)
+
+        setattr(self, attr_name + '_fig', fig)
+        setattr(self, attr_name + '_canvas', canvas)
+        return fig, canvas
+
+    def _ensure_individual_subtabs(self):
+        """Create Individual Flies sub-tabs on first use."""
+        if self.individual_subtabs is not None:
+            return
+
+        tab = self._result_tab_widgets["Individual Flies"]
+        for child in tab.winfo_children():
+            child.destroy()
+
+        tab.grid_rowconfigure(0, weight=1)
+        tab.grid_columnconfigure(0, weight=1)
+
+        self.individual_subtabs = ctk.CTkTabview(
+            tab, fg_color=C["bg_card"],
+            segmented_button_fg_color=C["bg"],
+            segmented_button_selected_color=C["accent"],
+            segmented_button_selected_hover_color=C["accent_hover"],
+            segmented_button_unselected_color=C["bg"],
+            segmented_button_unselected_hover_color=C["bg_hover"],
+        )
+        self.individual_subtabs.grid(row=0, column=0, sticky="nsew")
+
+        for name in ["Trajectory Overlay", "Metrics Heatmap", "Speed Curves"]:
+            sub = self.individual_subtabs.add(name)
+            sub.grid_rowconfigure(0, weight=1)
+            sub.grid_columnconfigure(0, weight=1)
+            self._individual_sub_widgets[name] = sub
+
+    def _on_result_tab_changed(self):
+        """Draw deferred plot when user switches to a new results tab."""
+        try:
+            tab = self.results_plot_tabview.get()
+        except Exception:
+            return
+        if tab in self._pending_draws:
+            items = self._pending_draws.pop(tab)
+            for canvas in items:
+                canvas.draw()
+
+    def _bind_all_context_menus(self):
+        # Context menus for lazy figures are bound in _ensure_fig
+        # Only bind setup/diagnostics here (eagerly created)
+        pass
 
     # ------------------------------------------------------------------
     # Treeview dark style
@@ -969,16 +1204,46 @@ class FreeClimberApp(ctk.CTk):
                          background=C["bg_card"],
                          foreground=C["text"],
                          fieldbackground=C["bg_card"],
-                         rowheight=28,
-                         font=("Menlo", 11))
+                         rowheight=30,
+                         font=F["mono"])
         style.configure("Dark.Treeview.Heading",
                          background=C["bg_hover"],
                          foreground=C["text"],
-                         font=(FONT_FAMILY, 11, "bold"))
+                         font=(FONT_FAMILY, 11, "bold"), relief="flat")
+        style.map("Dark.Treeview.Heading",
+                   background=[("active", C["accent_muted"])])
         style.map("Dark.Treeview",
                    background=[("selected", C["accent"])],
-                   foreground=[("selected", "#ffffff")])
+                   foreground=[("selected", C["text_on_accent"])])
+        self._tree_row_colors = (C["bg_card"], C["bg_hover"])
         return style
+
+    def _sort_treeview(self, tree, col):
+        """Sort treeview by column, toggling asc/desc."""
+        data = [(tree.set(k, col), k) for k in tree.get_children('')]
+        try:
+            data.sort(key=lambda t: float(t[0]))
+        except ValueError:
+            data.sort(key=lambda t: t[0])
+        if getattr(tree, '_sort_reverse', False):
+            data.reverse()
+        tree._sort_reverse = not getattr(tree, '_sort_reverse', False)
+        for i, (_, k) in enumerate(data):
+            tree.move(k, '', i)
+            tree.item(k, tags=('even' if i % 2 == 0 else 'odd',))
+
+    def _copy_tree_to_clipboard(self, tree):
+        """Copy selected rows (or all if none selected) as TSV."""
+        selected = tree.selection()
+        items = selected if selected else tree.get_children()
+        rows = [tree.item(k)['values'] for k in items]
+        if not rows:
+            return
+        header = '\t'.join(tree['columns'])
+        body = '\n'.join('\t'.join(str(v) for v in r) for r in rows)
+        self.clipboard_clear()
+        self.clipboard_append(header + '\n' + body)
+        self.status_var.set(f"Copied {len(rows)} rows to clipboard")
 
     # ------------------------------------------------------------------
     # Helper: labeled entry in a grid
@@ -1083,6 +1348,25 @@ class FreeClimberApp(ctk.CTk):
         self.trim_var.set(params.get('trim_outliers', False))
         self.bg_method_var.set(params.get('background_method', 'temporal_median'))
         self.tracking_var.set(params.get('individual_tracking', True))
+        self._update_sidebar_state()
+
+    # ------------------------------------------------------------------
+    # Progressive sidebar state
+    # ------------------------------------------------------------------
+    def _update_sidebar_state(self):
+        has_video = self.controller.detector is not None
+        has_roi = has_video and (int(self.roi_w.get() or 0) > 0)
+        has_preview = has_video and self._preview_done
+
+        self.step2_card.set_enabled(has_video)
+        self.step3_card.set_enabled(has_roi)
+        self.step4_card.set_enabled(has_preview)
+
+        # If loading a config with valid params, skip to step 4
+        if has_video and has_roi and self.controller.slopes_df is not None:
+            self._preview_done = True
+            self.step3_card.set_enabled(True)
+            self.step4_card.set_enabled(True)
 
     # ------------------------------------------------------------------
     # ROI drawing on Setup tab
@@ -1098,11 +1382,12 @@ class FreeClimberApp(ctk.CTk):
         if not self._roi_press:
             return
         self._roi_press = False
-        if event.xdata is not None:
+        if event.xdata is not None and event.ydata is not None:
             self._roi_x1 = int(event.xdata)
             self._roi_y1 = int(event.ydata)
         self._update_roi_entries()
         self._draw_roi_rect()
+        self._update_sidebar_state()
 
     def _roi_motion_event(self, event):
         if not self._roi_press or event.xdata is None:
@@ -1120,7 +1405,7 @@ class FreeClimberApp(ctk.CTk):
         x0, y0 = min(self._roi_x0, self._roi_x1), min(self._roi_y0, self._roi_y1)
         w = abs(self._roi_x1 - self._roi_x0)
         h = abs(self._roi_y1 - self._roi_y0)
-        self._roi_rect = Rectangle((x0, y0), w, h, fill=False, edgecolor='red', linewidth=2)
+        self._roi_rect = Rectangle((x0, y0), w, h, fill=False, edgecolor=C["accent"], linewidth=2)
         ax.add_patch(self._roi_rect)
         self.setup_canvas.draw_idle()
 
@@ -1214,6 +1499,8 @@ class FreeClimberApp(ctk.CTk):
             self.recent_files = self.recent_files[:10]
 
         self.status_var.set(f"Loaded: {name_ext}")
+        self._preview_done = False
+        self._update_sidebar_state()
 
     # ------------------------------------------------------------------
     # Test parameters
@@ -1246,6 +1533,8 @@ class FreeClimberApp(ctk.CTk):
             self._populate_results(result)
             self._populate_statistics(result)
 
+        self._preview_done = True
+        self._update_sidebar_state()
         self.status_var.set("Parameter testing complete")
 
     # ------------------------------------------------------------------
@@ -1271,15 +1560,132 @@ class FreeClimberApp(ctk.CTk):
         self.update_idletasks()
 
         params = self._collect_params()
+
+        def progress(step, total, msg):
+            self.after(0, lambda: self._analysis_progress(step, total, msg))
+
+        def worker():
+            try:
+                result = self.controller.run_pipeline_only(params, progress_callback=progress)
+                self.after(0, lambda r=result: self._on_analysis_done(r))
+            except Exception as e:
+                self.after(0, lambda ex=e: self._on_analysis_done(ex))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _analysis_progress(self, step, total, msg):
+        self.progress_bar.set(step / max(total, 1))
+        self.progress_label.configure(text=msg)
+        self.status_var.set(msg)
+
+    def _draw_diagnostics(self):
+        """Draw diagnostic subplots using data stored on the detector object."""
+        import matplotlib.cm as cm
+        from matplotlib.lines import Line2D
+
+        det = self.controller.detector
+        if det is None:
+            return
+
         self.diag_fig.clear()
         axes = [self.diag_fig.add_subplot(2, 3, i + 1) for i in range(6)]
 
-        try:
-            self.update_idletasks()
-            result = self.controller.test_parameters(params, axes)
-        except Exception as e:
-            result = e
-        self._on_analysis_done(result)
+        # Subplot 0: Background image
+        if hasattr(det, 'background') and det.background is not None:
+            axes[0].set_title("Background Image")
+            axes[0].imshow(det.background, cmap=cm.Greys_r)
+            axes[0].set_xlim(0, det.w)
+            axes[0].set_ylim(det.h, 0)
+
+        # Subplot 1: Test frame with spot overlay
+        if hasattr(det, 'df_big') and det.df_big is not None:
+            spots_false = det.df_big[~det.df_big['True_particle']]
+            spots_true = det.df_big[det.df_big['True_particle']].copy()
+
+            spots_true['vial'] = np.repeat(0, spots_true.shape[0])
+            vial_assignments = det.bin_vials(spots_true, vials=det.vials, bin_lines=det.bin_lines)[1]
+            spots_true.loc[(spots_true.x >= det.bin_lines[0]) & (spots_true.x <= det.bin_lines[-1]), 'vial'] = vial_assignments
+
+            axes[1].set_title(f'Frame: {det.check_frame}')
+            if hasattr(det, 'clean_stack') and det.clean_stack is not None:
+                axes[1].imshow(det.clean_stack[det.check_frame], cmap=cm.Greys_r)
+            axes[1].scatter(
+                spots_false[spots_false.frame == det.check_frame].x,
+                spots_false[spots_false.frame == det.check_frame].y,
+                color='b', marker='+', alpha=.5)
+            a = axes[1].scatter(
+                spots_true[spots_true.frame == det.check_frame].x,
+                spots_true[spots_true.frame == det.check_frame].y,
+                c=spots_true[spots_true.frame == det.check_frame].vial,
+                cmap=det.vial_color_map, marker='o', alpha=.8)
+            a.set_facecolor('none')
+            axes[1].vlines(det.bin_lines, 0, det.df_big.y.max(), color='w')
+            axes[1].set_xlim(0, det.w)
+            axes[1].set_ylim(det.h, 0)
+
+        # Subplot 2: Mean vertical position (local linear regression)
+        if hasattr(det, 'df_filtered') and det.df_filtered is not None:
+            df = det.df_filtered.sort_values(by='frame')
+            convert_x, convert_y = 1, 1
+            if det.convert_to_cm_sec:
+                convert_x, convert_y = det.frame_rate, det.pixel_to_cm
+            for V in range(1, det.vials + 1):
+                label = f'Vial {V}'
+                color = det.color_list[V - 1]
+                _df = df[df.vial == V]
+                begin = det.local_linear_regression(_df).iloc[0].first_frame.astype(int)
+                end = begin + det.window
+                axes[2].plot(_df.groupby('frame').frame.mean() / convert_x,
+                             _df.groupby('frame').y.mean() / convert_y, alpha=.35, color=color, label='')
+                _df = _df[(_df.frame >= begin) & (_df.frame <= end)]
+                axes[2].plot(_df.groupby('frame').frame.mean() / convert_x,
+                             _df.groupby('frame').y.mean() / convert_y, color=color, label=label)
+            label_y, label_x = '(pixels)', 'Frames'
+            if det.convert_to_cm_sec:
+                label_x, label_y = 'Seconds', '(cm)'
+            axes[2].set(title='Mean vertical position over time',
+                        ylabel=f'Mean y-position {label_y}', xlabel=label_x)
+            ncol = 3 if det.vials > 10 else (2 if det.vials > 5 else 1)
+            axes[2].legend(frameon=False, fontsize='x-small', ncol=ncol)
+
+        # Subplot 3: Mass distribution
+        bins = 40
+        if hasattr(det, 'df_big') and det.df_big is not None:
+            axes[3].set_title('Mass Distribution')
+            axes[3].hist(det.df_big.mass, bins=bins)
+            y_max = np.histogram(det.df_big.mass, bins=bins)[0].max()
+            axes[3].vlines(det.minmass, 0, y_max)
+
+        # Subplot 4: Signal distribution
+        if hasattr(det, 'df_big') and det.df_big is not None:
+            axes[4].set_title('Signal Distribution')
+            axes[4].hist(det.df_big.signal, bins=bins)
+            y_max = np.histogram(det.df_big.signal, bins=bins)[0].max()
+            axes[4].vlines(det.threshold, 0, y_max)
+
+        # Subplot 5: Flies detected per frame
+        if hasattr(det, 'df_filtered') and det.df_filtered is not None:
+            df = det.df_filtered.sort_values(by='frame')
+            for V in range(1, det.vials + 1):
+                color = det.color_list[V - 1]
+                _df = df[df.vial == V]
+                begin = det.local_linear_regression(_df).iloc[0].first_frame.astype(int)
+                end = begin + det.window
+                axes[5].plot(_df.groupby('frame').frame.unique(),
+                             _df.groupby('frame').y.count(), alpha=.3, color=color, label='')
+                _df_lin = _df[(_df.frame >= begin) & (_df.frame <= end)]
+                axes[5].plot(_df_lin.groupby('frame').frame.unique(),
+                             _df_lin.groupby('frame').frame.count(), color=color, alpha=.5)
+                axes[5].hlines(np.median(_df_lin.groupby('frame').frame.count()),
+                               df.frame.min(), df.frame.max(), linestyle='--', alpha=.7, color=color)
+            axes[5].set(title='Flies detected per frame', ylabel='Flies detected', xlabel='Frame')
+            axes[5].set_ylim(ymin=0)
+            custom_lines = [Line2D([0], [0], color='k', linestyle='--', alpha=.9),
+                            Line2D([0], [0], color='k', linestyle='-', alpha=.5)]
+            axes[5].legend(custom_lines, ['Median', 'All frames'], frameon=False, fontsize='x-small')
+
+        self.diag_fig.tight_layout()
+        self.diag_canvas.draw()
 
     def _on_analysis_done(self, result):
         self.run_btn.configure(state="normal", text="RUN ANALYSIS")
@@ -1291,13 +1697,13 @@ class FreeClimberApp(ctk.CTk):
             self.progress_label.configure(text="Failed")
             return
 
-        self.diag_fig.tight_layout()
-        self.diag_canvas.draw()
+        self._draw_diagnostics()
 
         if 'slopes_df' in result:
             self._populate_results(result)
             self._populate_statistics(result)
             self.tabview.set("Results")
+            self._on_result_tab_changed()
 
         self.progress_label.configure(text="Complete")
         self.status_var.set("Analysis complete \u2014 results saved")
@@ -1323,7 +1729,11 @@ class FreeClimberApp(ctk.CTk):
             level = quality.get('overall_level', '?')
             summary_parts.append(f"Quality: {dots} {level.title()} ({score:.2f})")
 
-        n_vials = len(df)
+        vial_col = next((c for c in df.columns if 'vial' in c.lower()), None)
+        if vial_col:
+            n_vials = len(df[~df[vial_col].astype(str).str.endswith('_all')])
+        else:
+            n_vials = len(df)
         summary_parts.append(f"Vials: {n_vials}")
 
         pop = result.get('population_metrics') if isinstance(result, dict) else None
@@ -1353,18 +1763,31 @@ class FreeClimberApp(ctk.CTk):
         cols = list(df.columns) + (['q_score'] if quality else [])
         self.slopes_tree["columns"] = cols
         for col in cols:
-            self.slopes_tree.heading(col, text=col)
-            max_width = max(len(col) * 10, 70)
-            self.slopes_tree.column(col, width=min(max_width, 150), minwidth=50)
+            display_name = col.replace('_', ' ').title()
+            self.slopes_tree.heading(col, text=display_name,
+                command=lambda c=col: self._sort_treeview(self.slopes_tree, c))
+            data_width = max((len(str(v)) for v in df[col]), default=0) * 9 if col in df.columns else 0
+            max_width = max(len(display_name) * 10, data_width, 70)
+            self.slopes_tree.column(col, width=min(max_width, 200), minwidth=50)
 
         per_vial_quality = quality.get('per_vial', {}) if quality else {}
-        for idx, row in df.iterrows():
-            values = [str(round(v, 4)) if isinstance(v, float) else str(v) for v in row]
+        for row_i, (idx, row) in enumerate(df.iterrows()):
+            values = []
+            for v in row:
+                if isinstance(v, float) and v == int(v):
+                    values.append(str(int(v)))
+                elif isinstance(v, float):
+                    values.append(str(round(v, 4)))
+                else:
+                    values.append(str(v))
             if quality:
                 vial_id = str(row.get('vial_ID', idx))
                 vq = per_vial_quality.get(vial_id, {})
                 values.append(self._quality_dots(vq.get('score', 0)))
-            self.slopes_tree.insert("", "end", values=values)
+            tag = 'even' if row_i % 2 == 0 else 'odd'
+            self.slopes_tree.insert("", "end", values=values, tags=(tag,))
+        self.slopes_tree.tag_configure('even', background=self._tree_row_colors[0])
+        self.slopes_tree.tag_configure('odd', background=self._tree_row_colors[1])
 
         # --- Per-fly metrics table ---
         per_fly = result.get('per_fly_metrics') if isinstance(result, dict) else None
@@ -1373,54 +1796,100 @@ class FreeClimberApp(ctk.CTk):
             pcols = list(per_fly.columns)
             self.perfly_tree["columns"] = pcols
             for col in pcols:
-                self.perfly_tree.heading(col, text=col)
-                self.perfly_tree.column(col, width=min(max(len(col) * 9, 60), 130), minwidth=40)
-            for _, row in per_fly.iterrows():
-                values = [str(round(v, 3)) if isinstance(v, float) else str(v) for v in row]
-                self.perfly_tree.insert("", "end", values=values)
+                display_name = col.replace('_', ' ').title()
+                self.perfly_tree.heading(col, text=display_name,
+                    command=lambda c=col: self._sort_treeview(self.perfly_tree, c))
+                self.perfly_tree.column(col, width=min(max(len(display_name) * 9, 60), 160), minwidth=40)
+            for row_i, (_, row) in enumerate(per_fly.iterrows()):
+                values = []
+                for col, v in zip(pcols, row):
+                    if col == 'particle' and isinstance(v, float):
+                        values.append(str(int(v)))
+                    elif isinstance(v, float):
+                        values.append(str(round(v, 3)))
+                    else:
+                        values.append(str(v))
+                tag = 'even' if row_i % 2 == 0 else 'odd'
+                self.perfly_tree.insert("", "end", values=values, tags=(tag,))
+            self.perfly_tree.tag_configure('even', background=self._tree_row_colors[0])
+            self.perfly_tree.tag_configure('odd', background=self._tree_row_colors[1])
 
         # --- Population stats text ---
         self._update_pop_stats_text(pop)
 
-        # --- Speed chart (bar_chart_with_points) ---
-        self._plot_speed_chart(df)
+        # --- Overview (Speed + Distribution side by side) ---
+        self._plot_overview(df, result)
 
         # --- Raincloud plot ---
-        self._plot_raincloud(df)
+        self._plot_raincloud(df, result)
 
-        # --- Trajectory plot (using figures.py) ---
+        # --- Trajectory plot ---
         positions = self.controller.get_positions()
         self._plot_trajectory(positions, result)
 
-        # --- Distribution plot ---
-        self._plot_distribution(df)
+        # --- Individual Flies (Per-Fly + Heatmap + Speed Curves) ---
+        self._plot_individual_flies(result)
 
-        # --- Per-fly overlay plot ---
-        self._plot_perfly_overlay(result)
-
-        # --- Per-fly metrics heatmap ---
-        self._plot_heatmap(result)
-
-        # --- Per-fly speed curves ---
-        self._plot_speed_curves(result)
+        # Draw only the currently visible tab immediately; defer others
+        try:
+            active = self.results_plot_tabview.get()
+            if active in self._pending_draws:
+                for c in self._pending_draws.pop(active):
+                    c.draw()
+        except Exception:
+            pass
 
     def _quality_dots(self, score: float) -> str:
         filled = round(score * 4)
         return '\u25cf' * filled + '\u25cb' * (4 - filled)
 
-    def _plot_speed_chart(self, df: pd.DataFrame):
-        self.speed_fig.clear()
-        ax = self.speed_fig.add_subplot(111)
+    def _plot_overview(self, df: pd.DataFrame, result=None):
+        fig, canvas = self._ensure_fig('overview', self._result_tab_widgets["Overview"], figsize=(10, 4))
+        fig.clear()
+
+        ci_data = result.get('climbing_index') if isinstance(result, dict) else None
+        n_panels = 3 if ci_data else 2
+
+        ax_speed = fig.add_subplot(1, n_panels, 1)
+        ax_dist = fig.add_subplot(1, n_panels, 2)
 
         groups = self._build_speed_groups(df)
+
+        # Speed chart (left) — per-vial bar chart
         if groups:
             try:
                 from output.figures import bar_chart_with_points
                 bar_chart_with_points(groups, ylabel='Climbing Speed',
-                                      title='Climbing Speed by Vial', ax=ax)
-            except Exception:
-                ax.set_title("Speed chart error")
-        self.speed_canvas.draw()
+                                      title='Climbing Speed by Vial', ax=ax_speed)
+            except Exception as e:
+                logger.error("Speed chart failed: %s", e, exc_info=True)
+                ax_speed.text(0.5, 0.5, f"Error: {e}", transform=ax_speed.transAxes,
+                    ha='center', va='center', fontsize=9, color=C["danger"], wrap=True)
+
+        # Distribution (center) — needs >=2 values per group for KDE
+        dist_groups = self._build_distribution_groups(df, result)
+        if dist_groups:
+            try:
+                from output.figures import speed_distribution
+                speed_distribution(dist_groups, ax=ax_dist)
+            except Exception as e:
+                logger.error("Distribution plot failed: %s", e, exc_info=True)
+                ax_dist.text(0.5, 0.5, f"Error: {e}", transform=ax_dist.transAxes,
+                    ha='center', va='center', fontsize=9, color=C["danger"], wrap=True)
+
+        # Climbing Index (right) — if available
+        if ci_data:
+            ax_ci = fig.add_subplot(1, n_panels, 3)
+            try:
+                from output.figures import climbing_index_chart
+                climbing_index_chart(ci_data, ax=ax_ci)
+            except Exception as e:
+                logger.error("Climbing index chart failed: %s", e, exc_info=True)
+                ax_ci.text(0.5, 0.5, f"Error: {e}", transform=ax_ci.transAxes,
+                    ha='center', va='center', fontsize=9, color=C["danger"], wrap=True)
+
+        fig.tight_layout()
+        self._pending_draws.setdefault("Overview", []).append(canvas)
 
     def _build_speed_groups(self, df: pd.DataFrame) -> dict:
         ycol = None
@@ -1442,39 +1911,99 @@ class FreeClimberApp(ctk.CTk):
                 group_col = c
                 break
 
+        if group_col:
+            df = df[~df[group_col].astype(str).str.endswith('_all')].copy()
+            df = df[df[group_col] != 0].copy()
+
         groups = {}
         if group_col and df[group_col].nunique() >= 2:
             for name, sub in df.groupby(group_col):
                 vals = pd.to_numeric(sub[ycol], errors='coerce').dropna().values
                 if len(vals) > 0:
-                    groups[f"Vial {name}"] = vals
+                    m = re.search(r'(\d+)$', str(name))
+                    label = f"Vial {m.group(1)}" if m else f"Vial {name}"
+                    groups[label] = vals
         else:
             vals = pd.to_numeric(df[ycol], errors='coerce').dropna().values
             if len(vals) > 0:
                 groups['All'] = vals
         return groups
 
-    def _plot_raincloud(self, df: pd.DataFrame):
-        self.raincloud_fig.clear()
-        ax = self.raincloud_fig.add_subplot(111)
+    def _build_distribution_groups(self, df: pd.DataFrame, result=None) -> dict:
+        """Build groups with >=2 values for KDE/violin plots.
 
-        groups = self._build_speed_groups(df)
+        Tries per-fly metrics first (rich per-fly data), falls back to
+        pooling all slopes into a single group.
+        """
+        per_fly = result.get('per_fly_metrics') if result and isinstance(result, dict) else None
+        if per_fly is not None and len(per_fly) > 0:
+            speed_col = None
+            for c in per_fly.columns:
+                if any(kw in c.lower() for kw in ['speed', 'velocity', 'slope']):
+                    speed_col = c
+                    break
+            if speed_col:
+                vial_col = None
+                for c in per_fly.columns:
+                    if 'vial' in c.lower():
+                        vial_col = c
+                        break
+                if vial_col:
+                    per_fly = per_fly[~per_fly[vial_col].astype(str).str.endswith('_all')].copy()
+                    per_fly = per_fly[per_fly[vial_col] != 0].copy()
+                groups = {}
+                if vial_col and per_fly[vial_col].nunique() >= 2:
+                    for name, sub in per_fly.groupby(vial_col):
+                        vals = pd.to_numeric(sub[speed_col], errors='coerce').dropna().values
+                        if len(vals) >= 2:
+                            m = re.search(r'(\d+)$', str(name))
+                            label = f"Vial {m.group(1)}" if m else f"Vial {name}"
+                            groups[label] = vals
+                if not groups:
+                    vals = pd.to_numeric(per_fly[speed_col], errors='coerce').dropna().values
+                    if len(vals) >= 2:
+                        groups['All Flies'] = vals
+                if groups:
+                    return groups
+
+        ycol = None
+        for c in df.columns:
+            if any(kw in c.lower() for kw in ['slope', 'velocity', 'speed']):
+                ycol = c
+                break
+        if ycol is None:
+            return {}
+        vals = pd.to_numeric(df[ycol], errors='coerce').dropna().values
+        if len(vals) >= 2:
+            return {'All Vials': vals}
+        return {}
+
+    def _plot_raincloud(self, df: pd.DataFrame, result=None):
+        fig, canvas = self._ensure_fig('raincloud', self._result_tab_widgets["Raincloud"])
+        fig.clear()
+        ax = fig.add_subplot(111)
+
+        groups = self._build_distribution_groups(df, result)
         if len(groups) >= 1:
             try:
                 from output.figures import raincloud_plot
                 raincloud_plot(groups, ylabel='Climbing Speed',
                                title='Speed Distribution (Raincloud)', ax=ax)
-            except Exception:
-                ax.set_title("Raincloud plot error")
-        self.raincloud_canvas.draw()
+            except Exception as e:
+                logger.error("Raincloud plot failed: %s", e, exc_info=True)
+                ax.text(0.5, 0.5, f"Error: {e}", transform=ax.transAxes,
+                    ha='center', va='center', fontsize=9, color=C["danger"], wrap=True)
+        fig.tight_layout()
+        self._pending_draws.setdefault("Raincloud", []).append(canvas)
 
     def _plot_trajectory(self, positions, result):
-        self.traj_fig.clear()
+        fig, canvas = self._ensure_fig('traj', self._result_tab_widgets["Trajectories"])
+        fig.clear()
         if positions is None:
-            self.traj_canvas.draw()
+            self._pending_draws.setdefault("Trajectories", []).append(canvas)
             return
 
-        ax = self.traj_fig.add_subplot(111)
+        ax = fig.add_subplot(111)
         params = self.controller.config
         try:
             from output.figures import trajectory_plot
@@ -1488,127 +2017,146 @@ class FreeClimberApp(ctk.CTk):
             )
         except Exception as e:
             ax.set_title(f"Trajectory plot error: {e}", fontsize=9)
-        self.traj_canvas.draw()
+        fig.tight_layout()
+        self._pending_draws.setdefault("Trajectories", []).append(canvas)
 
-    def _plot_distribution(self, df: pd.DataFrame):
-        self.dist_fig.clear()
-        ax = self.dist_fig.add_subplot(111)
-
-        ycol = None
-        for c in df.columns:
-            if any(kw in c.lower() for kw in ['slope', 'velocity', 'speed']):
-                ycol = c
-                break
-        if ycol is None:
-            self.dist_canvas.draw()
-            return
-
-        # Build groups by vial or genotype
-        group_col = None
-        for c in df.columns:
-            if any(kw in c.lower() for kw in ['geno', 'genotype', 'group', 'condition']):
-                group_col = c
-                break
-        if group_col is None:
-            for c in df.columns:
-                if 'vial' in c.lower():
-                    group_col = c
-                    break
-
-        if group_col and df[group_col].nunique() >= 2:
-            groups = {}
-            for name, sub in df.groupby(group_col):
-                vals = pd.to_numeric(sub[ycol], errors='coerce').dropna().values
-                if len(vals) >= 2:
-                    groups[str(name)] = vals
-
-            if len(groups) >= 1:
-                try:
-                    from output.figures import speed_distribution
-                    speed_distribution(groups, ax=ax)
-                except Exception:
-                    ax.set_title("Distribution: insufficient data")
-        else:
-            vals = pd.to_numeric(df[ycol], errors='coerce').dropna().values
-            if len(vals) >= 2:
-                try:
-                    from output.figures import speed_distribution
-                    speed_distribution({'All': vals}, ax=ax)
-                except Exception:
-                    pass
-
-        self.dist_canvas.draw()
-
-    def _plot_perfly_overlay(self, result):
-        self.perfly_fig.clear()
-        ax = self.perfly_fig.add_subplot(111)
-
+    def _plot_individual_flies(self, result):
+        self._ensure_individual_subtabs()
         has_tracking = result.get('has_individual_tracking', False) if isinstance(result, dict) else False
         raw_df = result.get('raw_tracking_df') if isinstance(result, dict) else None
+        per_fly = result.get('per_fly_metrics') if isinstance(result, dict) else None
         first_frame = result.get('first_frame') if isinstance(result, dict) else None
 
+        def _unavailable_msg(fig, canvas, label):
+            fig.clear()
+            ax = fig.add_subplot(111)
+            reasons = []
+            if not has_tracking:
+                reasons.append("tracking disabled or failed")
+            if raw_df is None:
+                reasons.append("no raw tracking data")
+            elif 'particle' not in raw_df.columns:
+                reasons.append("no 'particle' column in data")
+            msg = f"{label} not available"
+            if reasons:
+                msg += f"\n({', '.join(reasons)})"
+            ax.text(0.5, 0.5, msg, transform=ax.transAxes,
+                ha='center', va='center', fontsize=9, color=C["text_dim"], wrap=True)
+            ax.set_facecolor(C["bg_card"])
+            ax.axis('off')
+
+        # Per-fly overlay
+        overlay_fig, overlay_canvas = self._ensure_fig('overlay', self._individual_sub_widgets["Trajectory Overlay"])
+        overlay_fig.clear()
         if has_tracking and raw_df is not None and 'particle' in raw_df.columns:
             try:
                 from output.figures import per_fly_trajectory_overlay
+                ax_overlay = overlay_fig.add_subplot(111)
                 n_vials = self.controller.config.get('vials', 3)
                 per_fly_trajectory_overlay(raw_df, first_frame=first_frame,
-                                           vials=n_vials, ax=ax)
+                                           vials=n_vials, ax=ax_overlay)
+                overlay_fig.tight_layout()
             except Exception as e:
-                ax.set_title(f"Per-fly overlay error: {e}", fontsize=9)
+                logger.error("Per-fly overlay failed: %s", e, exc_info=True)
+                overlay_fig.clear()
+                ax = overlay_fig.add_subplot(111)
+                ax.text(0.5, 0.5, f"Error: {e}", transform=ax.transAxes,
+                    ha='center', va='center', fontsize=9, color=C["danger"], wrap=True)
         else:
-            ax.set_title("Per-fly tracking not available", fontsize=10, color=C["text_dim"])
-            ax.set_facecolor(C["bg_card"])
+            _unavailable_msg(overlay_fig, overlay_canvas, "Per-fly tracking")
 
-        self.perfly_canvas.draw()
-
-    def _plot_heatmap(self, result):
-        self.heatmap_fig.clear()
-        ax = self.heatmap_fig.add_subplot(111)
-
-        per_fly = result.get('per_fly_metrics') if isinstance(result, dict) else None
+        # Heatmap
+        heatmap_fig, heatmap_canvas = self._ensure_fig('heatmap', self._individual_sub_widgets["Metrics Heatmap"])
+        heatmap_fig.clear()
         if per_fly is not None and len(per_fly) > 0:
             try:
                 from output.figures import per_fly_metrics_heatmap
-                per_fly_metrics_heatmap(per_fly, ax=ax)
+                ax_heatmap = heatmap_fig.add_subplot(111)
+                per_fly_metrics_heatmap(per_fly, ax=ax_heatmap)
+                heatmap_fig.tight_layout()
             except Exception as e:
-                ax.set_title(f"Heatmap error: {e}", fontsize=9)
+                logger.error("Heatmap failed: %s", e, exc_info=True)
+                heatmap_fig.clear()
+                ax = heatmap_fig.add_subplot(111)
+                ax.text(0.5, 0.5, f"Error: {e}", transform=ax.transAxes,
+                    ha='center', va='center', fontsize=9, color=C["danger"], wrap=True)
         else:
-            ax.set_title("Per-fly metrics not available", fontsize=10, color=C["text_dim"])
-            ax.set_facecolor(C["bg_card"])
+            _unavailable_msg(heatmap_fig, heatmap_canvas, "Per-fly metrics")
 
-        self.heatmap_canvas.draw()
-
-    def _plot_speed_curves(self, result):
-        self.speed_curves_fig.clear()
-        ax = self.speed_curves_fig.add_subplot(111)
-
-        has_tracking = result.get('has_individual_tracking', False) if isinstance(result, dict) else False
-        raw_df = result.get('raw_tracking_df') if isinstance(result, dict) else None
-
+        # Speed curves
+        speed_fig, speed_canvas = self._ensure_fig('speed_curves', self._individual_sub_widgets["Speed Curves"])
+        speed_fig.clear()
         if has_tracking and raw_df is not None and 'particle' in raw_df.columns:
             try:
                 from output.figures import per_fly_speed_timeseries
-                per_fly_speed_timeseries(raw_df, ax=ax)
+                ax_curves = speed_fig.add_subplot(111)
+                per_fly_speed_timeseries(raw_df, ax=ax_curves)
+                speed_fig.tight_layout()
             except Exception as e:
-                ax.set_title(f"Speed curves error: {e}", fontsize=9)
+                logger.error("Speed curves failed: %s", e, exc_info=True)
+                speed_fig.clear()
+                ax = speed_fig.add_subplot(111)
+                ax.text(0.5, 0.5, f"Error: {e}", transform=ax.transAxes,
+                    ha='center', va='center', fontsize=9, color=C["danger"], wrap=True)
         else:
-            ax.set_title("Per-fly tracking not available", fontsize=10, color=C["text_dim"])
-            ax.set_facecolor(C["bg_card"])
+            _unavailable_msg(speed_fig, speed_canvas, "Speed curves")
 
-        self.speed_curves_canvas.draw()
+        # Defer all individual draws to tab switch
+        self._pending_draws.setdefault("Individual Flies", []).extend(
+            [overlay_canvas, heatmap_canvas, speed_canvas])
 
     def _update_pop_stats_text(self, pop):
         self.pop_stats_text.configure(state="normal")
         self.pop_stats_text.delete("0.0", "end")
         if pop:
             lines = []
-            for key, val in pop.items():
-                if isinstance(val, dict):
-                    lines.append(f"{key}:")
-                    for k, v in val.items():
-                        lines.append(f"  Vial {k}: {v:.1f}" if isinstance(v, float) else f"  {k}: {v}")
-                else:
-                    lines.append(f"{key}: {val}")
+            lines.append("\u2501" * 34)
+            lines.append("  POPULATION SUMMARY")
+            lines.append("\u2501" * 34)
+
+            for key in ['mean_speed', 'median_speed', 'std_speed', 'iqr']:
+                if key in pop:
+                    label = key.replace('_', ' ').title()
+                    val = pop[key]
+                    if isinstance(val, (list, tuple)):
+                        lines.append(f"  {label + ':':<18} [{val[0]:.3f}, {val[1]:.3f}]")
+                    elif isinstance(val, float):
+                        lines.append(f"  {label + ':':<18} {val:.3f}")
+                    else:
+                        lines.append(f"  {label + ':':<18} {val}")
+
+            fly_counts = pop.get('fly_count_per_vial')
+            if fly_counts and isinstance(fly_counts, dict):
+                lines.append("")
+                lines.append("  FLY COUNTS PER VIAL")
+                lines.append("  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510")
+                lines.append("  \u2502 Vial \u2502 Flies \u2502")
+                lines.append("  \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524")
+                total = 0
+                for k, v in sorted(fly_counts.items(), key=lambda x: str(x[0])):
+                    count = int(v) if isinstance(v, (int, float)) else v
+                    lines.append(f"  \u2502 {str(k):>4} \u2502 {str(count):>5} \u2502")
+                    if isinstance(v, (int, float)):
+                        total += int(v)
+                lines.append("  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518")
+                lines.append(f"  Total: ~{total} flies")
+
+            # Any remaining keys
+            shown = {'mean_speed', 'median_speed', 'std_speed', 'iqr', 'fly_count_per_vial'}
+            remaining = {k: v for k, v in pop.items() if k not in shown}
+            if remaining:
+                lines.append("")
+                for key, val in remaining.items():
+                    label = key.replace('_', ' ').title()
+                    if isinstance(val, float):
+                        lines.append(f"  {label + ':':<18} {val:.3f}")
+                    elif isinstance(val, dict):
+                        lines.append(f"  {label}:")
+                        for k2, v2 in val.items():
+                            lines.append(f"    {k2}: {v2:.1f}" if isinstance(v2, float) else f"    {k2}: {v2}")
+                    else:
+                        lines.append(f"  {label + ':':<18} {val}")
+
             self.pop_stats_text.insert("0.0", "\n".join(lines))
         else:
             self.pop_stats_text.insert("0.0", "Run analysis to see population metrics.")
@@ -1635,6 +2183,12 @@ class FreeClimberApp(ctk.CTk):
             self._set_stats_text("Statistics module not available.")
             return
 
+        # Filter out _all rows and vial 0
+        vial_filter_col = next((c for c in df.columns if 'vial' in c.lower()), None)
+        if vial_filter_col:
+            df = df[~df[vial_filter_col].astype(str).str.endswith('_all')].copy()
+            df = df[df[vial_filter_col] != 0].copy()
+
         slope_col = None
         for c in df.columns:
             if any(kw in c.lower() for kw in ['slope', 'velocity', 'speed']):
@@ -1657,47 +2211,51 @@ class FreeClimberApp(ctk.CTk):
                 vals = pd.to_numeric(sub[slope_col], errors='coerce').dropna().values
                 if len(vals) > 0:
                     groups[str(name)] = vals
-        else:
-            # Use vial as grouping for the plot
-            vial_col = None
-            for c in df.columns:
-                if 'vial' in c.lower():
-                    vial_col = c
-                    break
-            if vial_col and df[vial_col].nunique() >= 2:
-                for name, sub in df.groupby(vial_col):
-                    vals = pd.to_numeric(sub[slope_col], errors='coerce').dropna().values
-                    if len(vals) > 0:
-                        groups[f"Vial {name}"] = vals
+
+        # For distribution plots, use distribution groups (per-fly or pooled)
+        dist_groups = groups if all(len(v) >= 2 for v in groups.values()) and groups else \
+            self._build_distribution_groups(df, result)
 
         # --- Raincloud plot ---
-        self.stats_fig.clear()
-        ax = self.stats_fig.add_subplot(111)
-        if len(groups) >= 2:
+        stats_fig, stats_canvas = self._ensure_fig('stats', self._stats_plot_frame)
+        stats_fig.clear()
+        ax = stats_fig.add_subplot(111)
+        if len(dist_groups) >= 2:
             try:
                 from output.figures import raincloud_plot
-                raincloud_plot(groups, ylabel=slope_col, title="Distribution by Group", ax=ax)
-            except Exception:
-                from output.figures import box_swarm_plot
-                box_swarm_plot(groups, ylabel=slope_col, title="Distribution by Group", ax=ax)
-        elif len(groups) == 1:
-            name, vals = next(iter(groups.items()))
+                raincloud_plot(dist_groups, ylabel=slope_col, title="Distribution by Group", ax=ax)
+            except Exception as e:
+                logger.error("Stats raincloud failed: %s", e, exc_info=True)
+                try:
+                    from output.figures import box_swarm_plot
+                    box_swarm_plot(dist_groups, ylabel=slope_col, title="Distribution by Group", ax=ax)
+                except Exception as e2:
+                    logger.error("Stats box_swarm fallback failed: %s", e2, exc_info=True)
+                    ax.text(0.5, 0.5, f"Error: {e2}", transform=ax.transAxes,
+                        ha='center', va='center', fontsize=9, color=C["danger"], wrap=True)
+        elif len(dist_groups) == 1:
+            name, vals = next(iter(dist_groups.items()))
             ax.hist(vals, bins='auto', color=C["accent"], alpha=0.7, edgecolor='black')
             ax.set_xlabel(slope_col)
             ax.set_ylabel("Count")
             ax.set_title(f"Distribution: {name}")
-        self.stats_canvas.draw()
+        stats_fig.tight_layout()
+        stats_canvas.draw()
 
         # --- CDF plot ---
-        self.cdf_fig.clear()
-        cdf_ax = self.cdf_fig.add_subplot(111)
-        if len(groups) >= 1:
+        cdf_fig, cdf_canvas = self._ensure_fig('cdf', self._cdf_frame, figsize=(8, 3))
+        cdf_fig.clear()
+        cdf_ax = cdf_fig.add_subplot(111)
+        if len(dist_groups) >= 1:
             try:
                 from output.figures import cdf_comparison
-                cdf_comparison(groups, xlabel=slope_col, ax=cdf_ax)
-            except Exception:
-                cdf_ax.set_title("CDF plot error")
-        self.cdf_canvas.draw()
+                cdf_comparison(dist_groups, xlabel=slope_col, ax=cdf_ax)
+            except Exception as e:
+                logger.error("CDF plot failed: %s", e, exc_info=True)
+                cdf_ax.text(0.5, 0.5, f"Error: {e}", transform=cdf_ax.transAxes,
+                    ha='center', va='center', fontsize=9, color=C["danger"], wrap=True)
+        cdf_fig.tight_layout()
+        cdf_canvas.draw()
 
         # --- Formatted text ---
         lines = ["\u2550" * 50, "  STATISTICAL ANALYSIS", "\u2550" * 50, ""]
@@ -1779,9 +2337,6 @@ class FreeClimberApp(ctk.CTk):
     # ------------------------------------------------------------------
     # Text helpers
     # ------------------------------------------------------------------
-    def _set_results_text(self, text: str):
-        self.summary_label.configure(text=text)
-
     def _set_stats_text(self, text: str):
         self.stats_text.configure(state="normal")
         self.stats_text.delete("0.0", "end")
@@ -1839,12 +2394,23 @@ class FreeClimberApp(ctk.CTk):
             font=(FONT_FAMILY, 18, "bold"), text_color=C["text"],
         ).pack(pady=(S["lg"], S["md"]))
 
-        # Check Excel availability
+        # Check optional dependency availability
         try:
             import openpyxl  # noqa: F401
             has_excel = True
         except ImportError:
             has_excel = False
+        try:
+            import jinja2  # noqa: F401
+            import weasyprint  # noqa: F401
+            has_pdf = True
+        except ImportError:
+            has_pdf = False
+        try:
+            import plotly  # noqa: F401
+            has_html = True
+        except ImportError:
+            has_html = False
 
         formats = [
             ("Slopes CSV (backward compatible)", "csv"),
@@ -1852,6 +2418,8 @@ class FreeClimberApp(ctk.CTk):
             ("GraphPad Prism CSV", "prism"),
             ("Excel Workbook (.xlsx)" if has_excel else "Excel (install openpyxl)", "excel"),
             ("Per-fly Tracks CSV", "tracks"),
+            ("PDF Report" if has_pdf else "PDF Report (install jinja2 + weasyprint)", "pdf"),
+            ("HTML Report" if has_html else "HTML Report (install plotly)", "html"),
         ]
 
         fmt_var = ctk.StringVar(value="csv")
@@ -1866,18 +2434,25 @@ class FreeClimberApp(ctk.CTk):
         def do_export():
             fmt = fmt_var.get()
             if fmt == 'excel' and not has_excel:
-                messagebox.showinfo(
-                    "Missing Dependency",
-                    "Install openpyxl for Excel export:\n\npip install openpyxl",
-                    parent=win,
-                )
+                messagebox.showinfo("Missing Dependency",
+                    "Install openpyxl for Excel export:\n\npip install openpyxl", parent=win)
                 return
-            if fmt == 'excel':
-                ext = '.xlsx'
-                ftypes = [("Excel files", "*.xlsx"), ("All files", "*.*")]
-            else:
-                ext = '.csv'
-                ftypes = [("CSV files", "*.csv"), ("All files", "*.*")]
+            if fmt == 'pdf' and not has_pdf:
+                messagebox.showinfo("Missing Dependency",
+                    "Install jinja2 + weasyprint for PDF export:\n\npip install jinja2 weasyprint", parent=win)
+                return
+            if fmt == 'html' and not has_html:
+                messagebox.showinfo("Missing Dependency",
+                    "Install plotly for HTML export:\n\npip install plotly", parent=win)
+                return
+            ext_map = {'excel': '.xlsx', 'pdf': '.pdf', 'html': '.html'}
+            ext = ext_map.get(fmt, '.csv')
+            ftype_map = {
+                '.xlsx': [("Excel files", "*.xlsx"), ("All files", "*.*")],
+                '.pdf': [("PDF files", "*.pdf"), ("All files", "*.*")],
+                '.html': [("HTML files", "*.html"), ("All files", "*.*")],
+            }
+            ftypes = ftype_map.get(ext, [("CSV files", "*.csv"), ("All files", "*.*")])
             path = filedialog.asksaveasfilename(
                 parent=win, title="Save As",
                 defaultextension=ext, filetypes=ftypes,
@@ -1902,7 +2477,7 @@ class FreeClimberApp(ctk.CTk):
     # ------------------------------------------------------------------
     def _show_about(self):
         messagebox.showinfo("About FreeClimber",
-                            "FreeClimber v2.0\n\n"
+                            "FreeClimber v3.1\n\n"
                             "Drosophila RING Assay Analysis\n"
                             "Climbing velocity from video\n\n"
                             "Based on Spierer et al. (2021) J Exp Biol\n"
@@ -1988,6 +2563,7 @@ class FreeClimberApp(ctk.CTk):
             self._populate_results(result)
             self._populate_statistics(result)
             self.tabview.set("Results")
+            self._on_result_tab_changed()
             self.status_var.set(f"Batch complete: {len(combined)} rows")
         else:
             self.status_var.set("Batch complete: no results")
@@ -2008,12 +2584,255 @@ class FreeClimberApp(ctk.CTk):
         self.status_var.set("Methods paragraph copied to clipboard")
 
     # ------------------------------------------------------------------
+    # Right-click context menu on plots
+    # ------------------------------------------------------------------
+    def _bind_plot_context_menu(self, canvas, fig):
+        def _on_right_click(event):
+            menu = tk.Menu(self, tearoff=0, bg=C["bg_card"], fg=C["text"],
+                activebackground=C["accent"], activeforeground=C["bg"],
+                font=F["body"], relief="flat", borderwidth=1)
+            menu.add_command(label="Save Figure As\u2026", command=lambda: self._save_figure_dialog(fig))
+            menu.add_command(label="Copy to Clipboard", command=lambda: self._copy_figure_to_clipboard(fig))
+            menu.add_separator()
+            menu.add_command(label="Reset View", command=lambda: self._reset_figure_view(fig, canvas))
+            menu.post(event.x_root, event.y_root)
+        canvas.get_tk_widget().bind("<Button-2>", _on_right_click)
+        canvas.get_tk_widget().bind("<Control-Button-1>", _on_right_click)
+
+    def _save_figure_dialog(self, fig):
+        path = filedialog.asksaveasfilename(
+            title="Save Figure",
+            defaultextension=".png",
+            filetypes=[("PNG", "*.png"), ("SVG", "*.svg"), ("PDF", "*.pdf"), ("EPS", "*.eps")],
+        )
+        if path:
+            fig.savefig(path, dpi=300, bbox_inches='tight')
+            self.status_var.set(f"Figure saved: {os.path.basename(path)}")
+
+    def _copy_figure_to_clipboard(self, fig):
+        import io
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        buf.seek(0)
+        try:
+            import subprocess
+            proc = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE)
+            proc.communicate(buf.read())
+            self.status_var.set("Figure copied to clipboard")
+        except Exception:
+            self.status_var.set("Clipboard copy not available")
+
+    def _reset_figure_view(self, fig, canvas):
+        for ax in fig.axes:
+            ax.autoscale()
+        canvas.draw()
+
+    def _save_current_figure(self):
+        fig = self._get_active_figure()
+        if fig:
+            self._save_figure_dialog(fig)
+        else:
+            self.status_var.set("No figure to save")
+
+    def _get_active_figure(self):
+        try:
+            active_tab = self.tabview.get()
+        except Exception:
+            return None
+
+        if active_tab == "Setup":
+            return self.setup_fig
+        elif active_tab == "Diagnostics":
+            return self.diag_fig
+        elif active_tab == "Results":
+            try:
+                plot_tab = self.results_plot_tabview.get()
+            except Exception:
+                return self.overview_fig
+            tab_map = {
+                "Overview": self.overview_fig,
+                "Trajectories": self.traj_fig,
+                "Individual Flies": None,
+                "Raincloud": self.raincloud_fig,
+            }
+            if plot_tab == "Individual Flies":
+                try:
+                    if self.individual_subtabs is None:
+                        return None
+                    sub = self.individual_subtabs.get()
+                    sub_map = {
+                        "Trajectory Overlay": self.overlay_fig,
+                        "Metrics Heatmap": self.heatmap_fig,
+                        "Speed Curves": self.speed_curves_fig,
+                    }
+                    return sub_map.get(sub, self.overlay_fig)
+                except Exception:
+                    return self.overlay_fig
+            return tab_map.get(plot_tab, self.overview_fig)
+        elif active_tab == "Statistics":
+            return self.stats_fig
+        return None
+
+    # ------------------------------------------------------------------
+    # Load existing results
+    # ------------------------------------------------------------------
+    def _load_results(self):
+        path = filedialog.askopenfilename(
+            title="Load Results",
+            filetypes=[("CSV files", "*.csv"), ("Excel files", "*.xlsx"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+
+        try:
+            if path.endswith('.xlsx'):
+                df = pd.read_excel(path)
+            else:
+                df = pd.read_csv(path)
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not load results:\n\n{e}")
+            return
+
+        self._show_tabs()
+        self.controller.slopes_df = df
+        result = {'slopes_df': df}
+        self._populate_results(result)
+        self._populate_statistics(result)
+        self.tabview.set("Results")
+        self._on_result_tab_changed()
+        self.status_var.set(f"Loaded results: {os.path.basename(path)} ({len(df)} rows)")
+
+    # ------------------------------------------------------------------
+    # Vial Grouping Dialog (Phase 3.1)
+    # ------------------------------------------------------------------
+    def _show_vial_grouping_dialog(self):
+        n_vials = self.sl_vials.get()
+        win = ctk.CTkToplevel(self)
+        win.title("Assign Vial Groups")
+        win.geometry("400x500")
+        win.transient(self)
+        win.configure(fg_color=C["bg"])
+
+        ctk.CTkLabel(
+            win, text="Assign Groups",
+            font=(FONT_FAMILY, 18, "bold"), text_color=C["text"],
+        ).pack(pady=(S["lg"], S["sm"]))
+        ctk.CTkLabel(
+            win, text="Assign each vial to a named group (e.g., control, mutant A)",
+            font=F["caption"], text_color=C["text_dim"],
+        ).pack(pady=(0, S["md"]))
+
+        group_entries = {}
+        scroll = ctk.CTkScrollableFrame(win, fg_color=C["bg_card"], corner_radius=8)
+        scroll.pack(fill="both", expand=True, padx=S["md"], pady=S["sm"])
+
+        existing = self.controller.config.get('vial_groups', {})
+        for v in range(1, n_vials + 1):
+            row = ctk.CTkFrame(scroll, fg_color="transparent")
+            row.pack(fill="x", pady=S["xs"])
+            ctk.CTkLabel(row, text=f"Vial {v}:", width=60, font=F["body"],
+                         text_color=C["text"]).pack(side="left", padx=(0, S["sm"]))
+            entry = ctk.CTkEntry(row, width=200, fg_color=C["bg_input"],
+                                 border_color=C["border"], font=F["body"])
+            entry.pack(side="left", fill="x", expand=True)
+            default = existing.get(str(v), existing.get(v, ''))
+            if default:
+                entry.insert(0, str(default))
+            group_entries[v] = entry
+
+        # Control group selection
+        ctrl_frame = ctk.CTkFrame(win, fg_color="transparent")
+        ctrl_frame.pack(fill="x", padx=S["md"], pady=S["sm"])
+        ctk.CTkLabel(ctrl_frame, text="Control group:", font=F["body"],
+                     text_color=C["text"]).pack(side="left", padx=(0, S["sm"]))
+        ctrl_entry = ctk.CTkEntry(ctrl_frame, width=200, fg_color=C["bg_input"],
+                                  border_color=C["border"], font=F["body"])
+        ctrl_entry.pack(side="left", fill="x", expand=True)
+        ctrl_entry.insert(0, self.controller.config.get('control_group', ''))
+
+        def save_groups():
+            groups = {}
+            for v, entry in group_entries.items():
+                val = entry.get().strip()
+                if val:
+                    groups[v] = val
+            self.controller.config['vial_groups'] = groups
+            self.controller.config['control_group'] = ctrl_entry.get().strip()
+            win.destroy()
+            self.status_var.set(f"Groups assigned: {len(groups)} vials mapped")
+
+        ctk.CTkButton(
+            win, text="Save Groups", command=save_groups,
+            fg_color=C["accent"], hover_color=C["accent_hover"],
+            text_color=C["bg"], font=(FONT_FAMILY, 14, "bold"),
+            corner_radius=8, width=120, height=36,
+        ).pack(pady=S["md"])
+
+    # ------------------------------------------------------------------
+    # Enhanced Statistics Controls (Phase 3.2)
+    # ------------------------------------------------------------------
+    def _build_stats_controls(self, tab):
+        ctrl_frame = ctk.CTkFrame(tab, fg_color=C["bg_card"], corner_radius=8)
+        ctrl_frame.grid(row=0, column=0, sticky="ew", padx=S["xs"], pady=(S["xs"], 0))
+
+        inner = ctk.CTkFrame(ctrl_frame, fg_color="transparent")
+        inner.pack(fill="x", padx=S["sm"], pady=S["xs"])
+
+        ctk.CTkLabel(inner, text="Test:", font=F["caption"], text_color=C["text_dim"]).pack(side="left", padx=(0, 2))
+        self.stats_test_var = ctk.StringVar(value="Auto-detect")
+        ctk.CTkOptionMenu(
+            inner, variable=self.stats_test_var, width=130,
+            values=["Auto-detect", "Dunnett's", "Pairwise", "Two-group", "ANOVA", "Kruskal-Wallis"],
+            fg_color=C["bg_input"], button_color=C["accent"],
+            button_hover_color=C["accent_hover"], font=(FONT_FAMILY, 11),
+            command=lambda _: self._rerun_statistics(),
+        ).pack(side="left", padx=(0, S["sm"]))
+
+        ctk.CTkLabel(inner, text="Norm:", font=F["caption"], text_color=C["text_dim"]).pack(side="left", padx=(0, 2))
+        self.stats_norm_var = ctk.StringVar(value="None")
+        ctk.CTkOptionMenu(
+            inner, variable=self.stats_norm_var, width=120,
+            values=["None", "% of Control", "Z-score"],
+            fg_color=C["bg_input"], button_color=C["accent"],
+            button_hover_color=C["accent_hover"], font=(FONT_FAMILY, 11),
+            command=lambda _: self._rerun_statistics(),
+        ).pack(side="left", padx=(0, S["sm"]))
+
+        ctk.CTkLabel(inner, text="Correction:", font=F["caption"], text_color=C["text_dim"]).pack(side="left", padx=(0, 2))
+        self.stats_correction_var = ctk.StringVar(value="Holm-Bonferroni")
+        ctk.CTkOptionMenu(
+            inner, variable=self.stats_correction_var, width=140,
+            values=["Holm-Bonferroni", "Benjamini-Hochberg", "Bonferroni", "None"],
+            fg_color=C["bg_input"], button_color=C["accent"],
+            button_hover_color=C["accent_hover"], font=(FONT_FAMILY, 11),
+            command=lambda _: self._rerun_statistics(),
+        ).pack(side="left", padx=(0, S["sm"]))
+
+        ctk.CTkButton(
+            inner, text="Assign Groups", width=100,
+            fg_color=C["bg_hover"], hover_color=C["accent_muted"],
+            text_color=C["accent"], border_color=C["accent"], border_width=1,
+            corner_radius=6, font=(FONT_FAMILY, 11),
+            command=self._show_vial_grouping_dialog,
+        ).pack(side="right")
+
+    def _rerun_statistics(self):
+        if self.controller.slopes_df is not None:
+            result = {'slopes_df': self.controller.slopes_df}
+            if hasattr(self.controller, 'per_fly_metrics') and self.controller.per_fly_metrics is not None:
+                result['per_fly_metrics'] = self.controller.per_fly_metrics
+            if hasattr(self.controller, 'climbing_index') and self.controller.climbing_index is not None:
+                result['climbing_index'] = self.controller.climbing_index
+            result['has_individual_tracking'] = getattr(self.controller.detector, 'has_individual_tracking', False) if self.controller.detector else False
+            self._populate_statistics(result)
+
+    # ------------------------------------------------------------------
     # Log viewer (hidden by default, toggled from View menu)
     # ------------------------------------------------------------------
     def _build_log_viewer(self):
         self.log_frame = ctk.CTkFrame(self, height=120, fg_color=C["bg_card"], corner_radius=8)
         self.log_text = ctk.CTkTextbox(
-            self.log_frame, height=100, font=("Courier", 10),
+            self.log_frame, height=100, font=F["mono"],
             state="disabled", wrap="word",
             fg_color=C["bg_card"], text_color=C["text_dim"],
         )
@@ -2023,7 +2842,17 @@ class FreeClimberApp(ctk.CTk):
         logging.getLogger().addHandler(handler)
         handler.setLevel(logging.INFO)
 
+        import os
+        log_path = os.path.expanduser('~/FreeClimber_debug.log')
+        file_handler = logging.FileHandler(log_path, mode='w')
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter(
+            '%(asctime)s %(name)s %(levelname)s %(message)s'))
+        logging.getLogger().addHandler(file_handler)
+
     def _toggle_log_viewer(self):
+        if not hasattr(self, 'log_frame'):
+            return
         if self._log_visible:
             self.log_frame.pack_forget()
             self._log_visible = False
@@ -2061,42 +2890,46 @@ class FreeClimberApp(ctk.CTk):
         overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
         overlay.lift()
 
-        inner = ctk.CTkFrame(overlay, fg_color=C["bg_card"], corner_radius=16, width=520, height=400)
+        inner = ctk.CTkFrame(overlay, fg_color=C["bg_card"], corner_radius=16, width=520, height=440)
         inner.place(relx=0.5, rely=0.5, anchor="center")
         inner.pack_propagate(False)
 
+        if self._sidebar_logo:
+            ctk.CTkLabel(inner, image=self._sidebar_logo, text="").pack(pady=(S["xl"], S["sm"]))
+
         ctk.CTkLabel(
             inner, text="Welcome to FreeClimber",
-            font=(FONT_FAMILY, 22, "bold"), text_color=C["text"],
-        ).pack(pady=(S["xl"], S["md"]))
+            font=F["h1"], text_color=C["text"],
+        ).pack(pady=(S["sm"], S["sm"]))
 
         ctk.CTkLabel(
             inner, text="Drosophila RING Assay Analysis",
-            font=(FONT_FAMILY, 13), text_color=C["accent"],
+            font=F["body"], text_color=C["accent"],
         ).pack(pady=(0, S["lg"]))
 
         steps = [
-            ("\u2460", "Load a Video", "Open or drag a video file onto the window"),
-            ("\u2461", "Adjust Parameters", "Tweak detection settings, then click Preview"),
-            ("\u2462", "Run Analysis", "Hit RUN ANALYSIS to process and view results"),
+            ("1", "Load a Video", "Open or drag-drop a video file"),
+            ("2", "Adjust Parameters", "Tweak detection settings, then Preview"),
+            ("3", "Run Analysis", "Press RUN to process and view results"),
         ]
 
         for num, title, desc in steps:
             row = ctk.CTkFrame(inner, fg_color="transparent")
             row.pack(fill="x", padx=S["xl"], pady=S["sm"])
-            ctk.CTkLabel(
-                row, text=num, font=(FONT_FAMILY, 20),
-                text_color=C["accent"], width=36,
-            ).pack(side="left")
+            badge = ctk.CTkFrame(row, width=28, height=28, fg_color=C["accent"], corner_radius=14)
+            badge.pack(side="left")
+            badge.pack_propagate(False)
+            ctk.CTkLabel(badge, text=num, font=F["body_b"],
+                text_color=C["text_on_accent"], anchor="center").pack(expand=True)
             text_frame = ctk.CTkFrame(row, fg_color="transparent")
-            text_frame.pack(side="left", fill="x", padx=(S["sm"], 0))
+            text_frame.pack(side="left", fill="x", padx=(S["md"], 0))
             ctk.CTkLabel(
                 text_frame, text=title,
-                font=(FONT_FAMILY, 14, "bold"), text_color=C["text"], anchor="w",
+                font=F["body_b"], text_color=C["text"], anchor="w",
             ).pack(anchor="w")
             ctk.CTkLabel(
                 text_frame, text=desc,
-                font=(FONT_FAMILY, 12), text_color=C["text_dim"], anchor="w",
+                font=F["caption"], text_color=C["text_dim"], anchor="w",
             ).pack(anchor="w")
 
         def dismiss():
@@ -2107,7 +2940,7 @@ class FreeClimberApp(ctk.CTk):
         ctk.CTkButton(
             inner, text="Get Started", width=160, height=40,
             fg_color=C["accent"], hover_color=C["accent_hover"],
-            text_color=C["bg"], font=(FONT_FAMILY, 14, "bold"),
+            text_color=C["bg"], font=F["body_b"],
             corner_radius=10, command=dismiss,
         ).pack(pady=(S["lg"], S["xl"]))
 

@@ -79,7 +79,7 @@ def score_video(slopes_df: pd.DataFrame, df_filtered: pd.DataFrame = None) -> di
         fly_count = 5  # default assumption
         completeness = 1.0
         if df_filtered is not None and 'vial' in df_filtered.columns:
-            vial_num = row.name + 1 if isinstance(row.name, int) else 0
+            vial_num = row.name if isinstance(row.name, int) else 0
             vial_data = df_filtered[df_filtered.vial == vial_num] if vial_num > 0 else df_filtered
             if len(vial_data) > 0 and 'frame' in vial_data.columns:
                 fly_count = vial_data.groupby('frame').size().median()

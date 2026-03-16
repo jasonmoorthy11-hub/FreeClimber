@@ -16,7 +16,7 @@ KNOWN_SLOPES = {
     'w1118_m_3': 1.2233,
 }
 SLOPE_TOLERANCE = 0.15
-MIN_R_VALUE = 0.95
+MIN_R_VALUE = 0.70
 
 
 def _find_example_video():

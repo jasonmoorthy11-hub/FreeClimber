@@ -5,7 +5,7 @@
 ## Date      : December 2020
 ## Purpose   : Script contains main functions used in FreeClimber package, as well as added functionality
 
-version = '2.0.0'
+version = '3.1.0'
 publication = False
 
 import logging
@@ -97,7 +97,7 @@ class detector:
         ## Exit program if no variables are passed
         if variables is None:
             print('\n\nExiting program. No variable list loaded')
-            raise SystemExit from None
+            raise RuntimeError('No variable list loaded')
 
         ## Pass imported variables to the detector object (safe parsing)
         if self.debug:
@@ -156,7 +156,7 @@ class detector:
             return video_file
         else:
             print('\n\nExiting program. Invalid path to video file: ',video_file)
-            raise SystemExit from None
+            raise RuntimeError(f'Invalid path to video file: {video_file}')
 
     ## Specifying variables
     def specify_paths_details(self,video_file):
@@ -268,8 +268,7 @@ class detector:
 
         cap = cv2.VideoCapture(file)
         if not cap.isOpened():
-            print(f'!! Could not read video file. The file may be corrupted or in an unsupported format: {file}')
-            raise SystemExit from None
+            raise RuntimeError(f'Could not read video file. The file may be corrupted or in an unsupported format:\n{file}')
 
         ## Extract metadata from video
         self.width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -297,7 +296,7 @@ class detector:
 
         if not frames:
             print(f'!! Could not read any frames from video file: {file}')
-            raise SystemExit from None
+            raise RuntimeError(f'Could not read any frames from video file: {file}')
 
         self.n_frames = len(frames)
         image_stack = np.array(frames)
@@ -742,7 +741,7 @@ class detector:
         ## Catch if there are no spots detected
         if df.shape[0] == 0:
             print('!! Skipping video: No spots detected. Try modifying diameter, maxsize, or minmass parameters')
-            raise SystemExit from None
+            raise RuntimeError('No spots detected. Try modifying diameter, maxsize, or minmass parameters')
 
         ## Rounding detector outputs
         df['x'] = df.x.round(2)
@@ -1039,15 +1038,6 @@ class detector:
         x_max, y_max = int(x + self.w),int(y + self.h)
         stack = self.image_stack
 
-        if self.debug:
-            print('detector.step_1 cropped and grayscale: grayscale image:', grayscale)
-        self.clean_stack = self.crop_and_grayscale(stack,
-                     y=y, y_max=y_max,
-                     x=x, x_max=x_max,
-                     first_frame=self.crop_0,
-                     last_frame=self.crop_n,
-                     grayscale=grayscale)
-
         ## Confirm frame ranges
         self.check_variable_formats()
         if self.blank_0 < self.crop_0:
@@ -1091,20 +1081,30 @@ class detector:
             print(f'                   Identified {self.df_big.shape[0]} spots')
 
         ## Individual fly tracking (optional)
-        individual_tracking = getattr(self, 'individual_tracking', False)
+        individual_tracking = getattr(self, 'individual_tracking', True)
         if individual_tracking:
-            print('-- [ Step 2b ] Linking particles for individual tracking')
             search_range = getattr(self, 'search_range', max(self.diameter * 2, 15))
-            memory = getattr(self, 'link_memory', 3)
+            memory = getattr(self, 'link_memory', 5)
+            n_particles = len(self.df_big)
+            n_frames = self.df_big.frame.nunique()
+            logger.info("Tracking: %d particles across %d frames (search_range=%d, memory=%d)",
+                        n_particles, n_frames, search_range, memory)
+            print('-- [ Step 2b ] Linking particles for individual tracking')
             try:
                 tp.quiet()
                 linked = tp.link(self.df_big, search_range=search_range, memory=memory,
                                  adaptive_stop=2, adaptive_step=0.9)
-                linked = tp.filter_stubs(linked, threshold=10)
+                n_raw_tracks = linked.particle.nunique()
+                logger.info("tp.link produced %d raw tracks (before filter_stubs)", n_raw_tracks)
+
+                linked = tp.filter_stubs(linked, threshold=3)
                 n_tracks = linked.particle.nunique()
+                logger.info("After filter_stubs(threshold=3): %d tracks survive", n_tracks)
                 print(f'                   Linked {n_tracks} individual fly tracks')
 
                 if n_tracks == 0:
+                    logger.warning("No tracks survived filter_stubs (had %d raw tracks). "
+                                   "Try lower diameter or higher minmass.", n_raw_tracks)
                     print('!! No tracks survived filter_stubs. Continuing with population mode.')
                     self.has_individual_tracking = False
                     return
@@ -1114,6 +1114,7 @@ class detector:
                     try:
                         drift = tp.compute_drift(linked)
                         linked = tp.subtract_drift(linked, drift)
+                        linked = linked.reset_index(drop=True)
                         if self.debug:
                             print('                   Drift correction applied')
                     except Exception as e:
@@ -1128,6 +1129,7 @@ class detector:
                 self.df_big = linked
                 self.has_individual_tracking = True
             except Exception as e:
+                logger.error("Individual tracking failed: %s", e, exc_info=True)
                 print(f'!! Individual tracking failed: {e}. Continuing with population mode.')
                 self.has_individual_tracking = False
         else:
@@ -1229,7 +1231,7 @@ class detector:
         ## Checking to confirm DataFrame is not empty after filtering
         if self.df_big[self.df_big.True_particle].shape[0] == 0:
             print('\n\n!! No spots post-filtering, check detector and background subtraction settings for proper optimization')
-            raise SystemExit from None
+            raise RuntimeError('No spots post-filtering, check detector and background subtraction settings')
 
         ## Pruning errant points on periphery if outliers
         print('-- [ Step 4d ]   - Trimming outliers (if indicated)')
@@ -1331,8 +1333,7 @@ class detector:
 
         print('-- [ step 6b ] Creating diagnostic plot file')
                 ## Set up plots (now includes x-plot + final frame)
-        plt.figure(figsize=(12, 10))
-        fig, axes = plt.subplots(nrows=3, ncols=2)
+        fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(12, 10))
         ax1, ax2 = axes[0, 0], axes[0, 1]
         ax3, ax4 = axes[1, 0], axes[1, 1]
         ax5, ax6 = axes[2, 0], axes[2, 1]
@@ -1383,8 +1384,7 @@ class detector:
 #         if min_R < self.review_R:
 #             plt.savefig(self.path_review_diagnostic,dpi=100, transparent = True)
 
-        plt.close()
-        plt.close()
+        plt.close(fig)
         print('                --> Saved:',self.path_diagnostic.split('/')[-1])
         return
 

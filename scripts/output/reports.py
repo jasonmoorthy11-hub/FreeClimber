@@ -81,16 +81,28 @@ def generate_pdf_report(
 
     methods_text = generate_methods_paragraph(params) if params else ''
 
+    try:
+        from scripts import __version__
+    except ImportError:
+        from __init__ import __version__
+    vial_col = next((c for c in slopes_df.columns if 'vial' in c.lower()), None)
+    if vial_col:
+        filtered = slopes_df[~slopes_df[vial_col].astype(str).str.endswith('_all')]
+        filtered = filtered[filtered[vial_col] != 0]
+        n_vials = len(filtered)
+    else:
+        n_vials = len(slopes_df)
+
     html_content = _PDF_TEMPLATE.render(
         experiment_name=experiment_name or 'FreeClimber Analysis',
         date=datetime.now().strftime('%Y-%m-%d %H:%M'),
-        version='2.0.0',
+        version=__version__,
         slopes_html=slopes_df.to_html(index=False, classes='table', float_format=lambda x: f'{x:.4f}'),
         fig_images=fig_images,
         stats_lines=stats_lines,
         params_lines=params_lines,
         methods_text=methods_text,
-        n_vials=len(slopes_df),
+        n_vials=n_vials,
     )
 
     WeasyprintHTML(string=html_content).write_pdf(output_path)
@@ -293,7 +305,7 @@ def generate_methods_paragraph(params: dict) -> str:
     crop_n = params.get('crop_n', '?')
 
     text = (
-        f"Climbing velocity was measured using FreeClimber v2.0 (Spierer et al., 2021). "
+        f"Climbing velocity was measured using FreeClimber v3.1 (Spierer et al., 2021). "
         f"Videos were recorded at {frame_rate} fps and analyzed from frame {crop_0} to {crop_n}. "
         f"Background subtraction was performed using the {bg} method. "
         f"Fly positions were detected using particle detection (diameter={diameter} px, "

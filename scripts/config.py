@@ -42,6 +42,8 @@ KNOWN_PARAMS = {
     'trim_outliers':        (bool,  False,  None, None,  'Trim outlier points at edges'),
     'background_method':    (str,   'temporal_median', None, None, 'Background subtraction method: temporal_median, mog2, or running_average'),
     'individual_tracking':  (bool,  True,   None, None,  'Enable per-fly individual tracking via tp.link'),
+    'vial_groups':          (dict,  {},     None, None,  'Vial-to-group mapping {vial_num: group_name}'),
+    'control_group':        (str,   '',     None, None,  'Name of control group for Dunnett/normalization'),
 }
 
 

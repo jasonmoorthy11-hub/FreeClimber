@@ -309,6 +309,21 @@ class AnalysisController:
             )
         elif fmt == 'tracks' and self.positions_df is not None:
             export_per_fly_tracks(self.positions_df, path)
+        elif fmt == 'pdf':
+            from output.reports import generate_pdf_report
+            generate_pdf_report(
+                self.slopes_df,
+                figures={},
+                params=self.config,
+                output_path=path,
+            )
+        elif fmt == 'html':
+            from output.reports import generate_html_report
+            generate_html_report(
+                self.slopes_df,
+                params=self.config,
+                output_path=path,
+            )
         else:
             raise ValueError(f"Unknown format: {fmt}")
 

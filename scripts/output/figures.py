@@ -175,6 +175,8 @@ def speed_distribution(groups: dict, ylabel: str = 'Density',
         fig, ax = plt.subplots(figsize=(6, 4))
 
     colors = get_color_palette(len(groups))
+    if len(groups) == 1:
+        colors = ['#53a8b6']
 
     for (name, values), color in zip(groups.items(), colors):
         values = np.asarray(values, dtype=float)
@@ -271,7 +273,8 @@ def per_fly_metrics_heatmap(metrics_df: pd.DataFrame, ax=None) -> plt.Axes:
 
     im = ax.imshow(normed, aspect='auto', cmap='YlOrRd', interpolation='nearest')
     ax.set_xticks(range(len(numeric_cols)))
-    ax.set_xticklabels(numeric_cols, rotation=45, ha='right', fontsize=8)
+    display_cols = [c.replace('_', ' ').title() for c in numeric_cols]
+    ax.set_xticklabels(display_cols, rotation=60, ha='right', fontsize=9)
     fly_labels = metrics_df['particle'].values if 'particle' in metrics_df.columns else range(len(metrics_df))
     ax.set_yticks(range(len(fly_labels)))
     ax.set_yticklabels(fly_labels, fontsize=7)
@@ -316,6 +319,8 @@ def raincloud_plot(groups: dict, ylabel: str = 'Speed', title: str = '',
     from scipy.stats import gaussian_kde
 
     colors = get_color_palette(len(groups))
+    if len(groups) == 1:
+        colors = ['#53a8b6']
     names = list(groups.keys())
 
     for i, (_name, values) in enumerate(groups.items()):
@@ -376,7 +381,7 @@ def per_fly_speed_timeseries(df: pd.DataFrame, vial: int = None,
             continue
         dt = np.diff(track.frame.values).astype(float)
         dy = np.diff(track.y.values)
-        speed = dy / np.maximum(dt, 1)
+        speed = -dy / np.maximum(dt, 1)  # positive = climbing up
         frames = track.frame.values[1:]
         vial_idx = (int(track.vial.mode().iloc[0]) - 1) % len(colors) if 'vial' in track.columns else 0
         alpha = 0.8 if pid == highlight_particle else 0.15
@@ -391,7 +396,7 @@ def per_fly_speed_timeseries(df: pd.DataFrame, vial: int = None,
             continue
         dt = np.diff(track.frame.values).astype(float)
         dy = np.diff(track.y.values)
-        speed = pd.Series(dy / np.maximum(dt, 1), index=track.frame.values[1:])
+        speed = pd.Series(-dy / np.maximum(dt, 1), index=track.frame.values[1:])
         all_speeds.append(speed)
 
     if all_speeds:
@@ -403,7 +408,7 @@ def per_fly_speed_timeseries(df: pd.DataFrame, vial: int = None,
                          (mean_speed + sem_speed).values, alpha=0.3, color='#222222', zorder=9)
 
     ax.set_xlabel('Frame')
-    ax.set_ylabel('Vertical Speed (px/frame)')
+    ax.set_ylabel('Climbing Speed (px/frame)')
     ax.set_title('Per-Fly Speed Time Series')
     return ax
 
@@ -452,10 +457,12 @@ def cdf_comparison(groups: dict, xlabel: str = 'Speed',
         fig, ax = plt.subplots(figsize=(6, 4))
 
     colors = get_color_palette(len(groups))
+    if len(groups) == 1:
+        colors = ['#53a8b6']
     for (name, values), color in zip(groups.items(), colors):
         values = np.sort(np.asarray(values, dtype=float))
         values = values[~np.isnan(values)]
-        if len(values) == 0:
+        if len(values) < 2:
             continue
         cdf = np.arange(1, len(values) + 1) / len(values)
         ax.step(values, cdf, where='post', color=color, label=name, linewidth=1.5)

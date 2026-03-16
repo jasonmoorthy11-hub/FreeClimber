@@ -14,7 +14,7 @@ from os import path, walk
 from numpy import unique
 
 ## FreeClimber version
-version = '2.0.0'
+version = '2.3.0'
 
 def define_argument_parser():
     '''Defines arguments to be parsed, via argparse module.

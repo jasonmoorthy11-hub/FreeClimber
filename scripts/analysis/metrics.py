@@ -47,14 +47,14 @@ def compute_per_fly_metrics(df: pd.DataFrame, frame_rate: int = 30,
 
         # Instantaneous speeds
         speeds = np.sqrt(dx**2 + dy**2) / np.maximum(dt, 1)
-        vy = dy / np.maximum(dt, 1)  # vertical velocity per step
+        vy = -dy / np.maximum(dt, 1)  # vertical velocity (positive = climbing up)
 
         # Climbing speed (mean vertical velocity)
         climbing_speed = np.mean(vy) * conversion
-        upward_speed = np.mean(np.abs(vy[vy < 0])) * conversion if np.any(vy < 0) else 0.0
+        upward_speed = np.mean(np.abs(vy[vy > 0])) * conversion if np.any(vy > 0) else 0.0
 
         # Start latency: frames until first sustained upward movement (3+ consecutive)
-        upward = vy < 0
+        upward = vy > 0
         start_latency = _find_sustained_start(upward, threshold=3)
 
         # Maximum height reached
