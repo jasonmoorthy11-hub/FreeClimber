@@ -1,8 +1,8 @@
-climbing,1,vial_ID,first_frame,last_frame,slope,intercept,r_value,p_value,std_err
-climbing,,climbing__1,15,65,0.9875,39.4677,0.9766,0.0,0.0311
-climbing,,climbing__2,40,90,1.1734,19.4652,0.9718,0.0,0.0407
-climbing,,climbing__3,0,50,0.6967,41.2518,0.9869,0.0,0.0163
-climbing,,climbing__4,21,71,1.1723,20.6037,0.9912,0.0,0.0224
-climbing,,climbing__5,0,50,0.5593,29.229,0.9797,0.0,0.0163
-climbing,,climbing__6,38,88,1.099,37.4439,0.989,0.0,0.0235
-climbing,,climbing__all,29,79,0.9965,30.9289,0.9981,0.0,0.0089
+climbing,1,vial_ID,first_frame,last_frame,slope,intercept,r_value,p_value,std_err,quality
+climbing,,climbing__1,56,106,0.6734,96.0999,0.7888,0.0,0.075,good
+climbing,,climbing__2,45,95,0.2784,114.7917,0.6721,0.0,0.0438,low_r
+climbing,,climbing__3,77,127,0.0609,121.4445,0.1634,0.252,0.0525,low_r
+climbing,,climbing__4,20,70,0.1412,124.7573,0.7126,0.0,0.0199,good
+climbing,,climbing__5,44,94,-0.1629,117.599,-0.6425,0.0,0.0278,low_r
+climbing,,climbing__6,39,89,0.1291,138.1341,0.6529,0.0,0.0214,low_r
+climbing,,climbing__all,44,94,0.0828,127.9751,0.8126,0.0,0.0085,good
