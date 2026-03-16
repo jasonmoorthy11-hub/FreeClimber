@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+import sys
 
 
 a = Analysis(
@@ -32,7 +33,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['FreeClimber.icns'],
+    icon=['FreeClimber.icns'] if sys.platform == 'darwin' else ['FreeClimber.ico'],
 )
 coll = COLLECT(
     exe,

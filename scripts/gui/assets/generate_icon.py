@@ -269,6 +269,13 @@ def main():
     logo_256.save(os.path.join(assets_dir, "logo_256.png"), "PNG")
     print("  Saved logo_256.png (256x256)")
 
+    # Generate Windows .ico
+    ico_sizes = [16, 32, 48, 64, 128, 256]
+    ico_images = [master.resize((s, s), Image.LANCZOS) for s in ico_sizes]
+    ico_path = os.path.abspath(os.path.join(assets_dir, "..", "..", "..", "FreeClimber.ico"))
+    ico_images[0].save(ico_path, format="ICO", sizes=[(s, s) for s in ico_sizes], append_images=ico_images[1:])
+    print(f"  Saved {ico_path}")
+
     # Clean up iconset directory
     shutil.rmtree(iconset_dir)
     print("  Cleaned up iconset directory")

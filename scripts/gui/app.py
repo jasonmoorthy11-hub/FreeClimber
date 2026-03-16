@@ -25,6 +25,11 @@ logging.getLogger('PIL').setLevel(logging.WARNING)
 # Bootstrap sys.path so bare imports work from any launch location
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
+try:
+    from scripts import __version__
+except ImportError:
+    __version__ = "4.0.0"
+
 
 def _asset_path(filename):
     base = getattr(sys, '_MEIPASS', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
@@ -414,10 +419,17 @@ class FreeClimberApp(ctk.CTk):
 
     def __init__(self):
         super().__init__()
-        self.title("FreeClimber v4.0")
+        self.title(f"FreeClimber v{__version__}")
         self.geometry("1340x860")
         self.minsize(1060, 700)
         self.configure(fg_color=C["bg"])
+
+        try:
+            _icon_photo = tk.PhotoImage(file=_asset_path('logo_256.png'))
+            self.iconphoto(True, _icon_photo)
+            self._icon_ref = _icon_photo
+        except Exception:
+            logger.debug("Could not set window icon", exc_info=True)
 
         self.controller = AnalysisController()
         self.video_meta = None
@@ -716,7 +728,7 @@ class FreeClimberApp(ctk.CTk):
             font=F["h1"], text_color=C["text"], anchor="w",
         ).pack(side="left")
         ctk.CTkLabel(
-            title_frame, text="v3.0",
+            title_frame, text=f"v{__version__}",
             font=F["caption"], text_color=C["accent"], anchor="w",
         ).pack(side="left", padx=(S["sm"], 0), pady=(4, 0))
 
@@ -3070,7 +3082,7 @@ class FreeClimberApp(ctk.CTk):
     # ------------------------------------------------------------------
     def _show_about(self):
         messagebox.showinfo("About FreeClimber",
-                            "FreeClimber v4.0\n\n"
+                            f"FreeClimber v{__version__}\n\n"
                             "Drosophila RING Assay Analysis\n"
                             "Climbing velocity from video\n\n"
                             "Based on Spierer et al. (2021) J Exp Biol\n"

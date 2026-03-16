@@ -63,6 +63,9 @@ Repository = "https://github.com/adamspierer/FreeClimber"
 where = ["."]
 include = ["scripts*"]
 
+[tool.setuptools.package-data]
+"scripts.gui" = ["theme.json", "assets/*.png"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["scripts"]
