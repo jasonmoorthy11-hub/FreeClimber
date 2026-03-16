@@ -53,8 +53,8 @@ C = {
     "bg_hover":     "#1e1e30",   # Level 3: Overlay (dropdowns, tooltips, modals)
     "bg_elevated":  "#28283d",   # Level 4: Elevated (hover states, active items)
     "bg_input":     "#12121f",
-    "border":       "#ffffff12",
-    "border_subtle":"#ffffff08",
+    "border":       "#2a2a3e",
+    "border_subtle":"#1f1f32",
     # Text hierarchy
     "text":         "#f0f0f5",   # Primary
     "text_dim":     "#a0a0b8",   # Secondary
@@ -963,7 +963,7 @@ class FreeClimberApp(ctk.CTk):
         # ============================================================
         # HISTORY (collapsed)
         # ============================================================
-        history_card = CollapsibleCard(sidebar, icon="\ud83d\udcca", title="HISTORY", initially_open=False)
+        history_card = CollapsibleCard(sidebar, icon="\u23f0", title="HISTORY", initially_open=False)
         history_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
 
         self._history_frame = ctk.CTkScrollableFrame(
