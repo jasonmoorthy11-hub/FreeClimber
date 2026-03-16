@@ -41,7 +41,7 @@ jobs:
           pip install opencv-python-headless
 
       - name: Run tests
-        run: python -m pytest tests/ -v --tb=short -m "not slow" --cov=scripts --cov-report=xml
+        run: python -m pytest tests/ -v --tb=short -m "not slow" --cov=scripts --cov-report=xml --cov-fail-under=40
 
       - name: Upload coverage
         if: matrix.python-version == '3.12' && matrix.os == 'ubuntu-latest'

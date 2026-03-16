@@ -197,8 +197,8 @@ def speed_distribution(groups: dict, ylabel: str = 'Density',
     return ax
 
 
-def _add_significance_brackets(ax, group_names, significance):
-    """Add significance bracket annotations to a bar chart."""
+def _add_significance_brackets(ax, group_names, significance, x_map=None):
+    """Add significance bracket annotations to a plot."""
     y_max = ax.get_ylim()[1]
     y_step = y_max * 0.08
     current_y = y_max * 1.05
@@ -207,9 +207,9 @@ def _add_significance_brackets(ax, group_names, significance):
         if label == 'ns':
             continue
         try:
-            x1 = group_names.index(g1)
-            x2 = group_names.index(g2)
-        except ValueError:
+            x1 = x_map[g1] if x_map else group_names.index(g1)
+            x2 = x_map[g2] if x_map else group_names.index(g2)
+        except (ValueError, KeyError):
             continue
 
         ax.plot([x1, x1, x2, x2], [current_y, current_y + y_step * 0.3,
@@ -311,7 +311,7 @@ def batch_comparison(results: dict, ylabel: str = 'Mean Climbing Speed',
 
 
 def raincloud_plot(groups: dict, ylabel: str = 'Speed', title: str = '',
-                   ax=None) -> plt.Axes:
+                   significance: dict = None, ax=None) -> plt.Axes:
     """Half-violin + box + jittered swarm (Nature Methods standard)."""
     if ax is None:
         fig, ax = plt.subplots(figsize=(6, 4))
@@ -358,6 +358,12 @@ def raincloud_plot(groups: dict, ylabel: str = 'Speed', title: str = '',
     ax.set_ylabel(ylabel)
     if title:
         ax.set_title(title)
+
+    if significance:
+        rc_names_shifted = {n: i + 1 for i, n in enumerate(names)}
+        _add_significance_brackets(ax, list(rc_names_shifted.keys()), significance,
+                                   x_map=rc_names_shifted)
+
     return ax
 
 
@@ -500,6 +506,83 @@ def climbing_index_chart(ci_data: dict, ax=None) -> plt.Axes:
     ax.set_xlim(0, 110)
     ax.set_title('Climbing Index by Vial')
     return ax
+
+
+def enable_hover(fig, scatter_artists, labels_list):
+    """Add hover tooltips to scatter artists on a figure.
+
+    Args:
+        fig: matplotlib Figure
+        scatter_artists: list of PathCollection (scatter) objects
+        labels_list: list of lists — one label per point per artist
+    """
+    annot = None
+
+    def _on_move(event):
+        nonlocal annot
+        if event.inaxes is None:
+            if annot and annot.get_visible():
+                annot.set_visible(False)
+                fig.canvas.draw_idle()
+            return
+
+        for scatter, labels in zip(scatter_artists, labels_list):
+            cont, ind = scatter.contains(event)
+            if cont:
+                idx = ind["ind"][0]
+                pos = scatter.get_offsets()[idx]
+                if annot is None:
+                    annot = event.inaxes.annotate("", xy=(0, 0),
+                        xytext=(10, 10), textcoords="offset points",
+                        bbox=dict(boxstyle="round,pad=0.3", fc="#2a2a3e", ec="#53a8b6", alpha=0.9),
+                        fontsize=8, color='white')
+                annot.xy = pos
+                annot.set_text(labels[idx] if idx < len(labels) else "")
+                annot.set_visible(True)
+                fig.canvas.draw_idle()
+                return
+
+        if annot and annot.get_visible():
+            annot.set_visible(False)
+            fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect("motion_notify_event", _on_move)
+
+
+def small_multiples_trajectories(df, vials, figsize=(10, 6)):
+    """Per-vial trajectory subplots in a grid."""
+    ncols = min(vials, 5)
+    nrows = max(1, (vials + ncols - 1) // ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=figsize, squeeze=False)
+
+    colors = get_color_palette(8)
+    for v in range(1, vials + 1):
+        row, col = divmod(v - 1, ncols)
+        ax = axes[row][col]
+        vdf = df[df.vial == v] if 'vial' in df.columns else df
+
+        if 'particle' not in vdf.columns or len(vdf) == 0:
+            ax.set_title(f"Vial {v}")
+            ax.text(0.5, 0.5, "No data", transform=ax.transAxes, ha='center', va='center',
+                    fontsize=9, color='gray')
+            continue
+
+        for pid, track in vdf.groupby('particle'):
+            track = track.sort_values('frame')
+            y_disp = track.y.values[0] - track.y.values
+            c = colors[int(pid) % len(colors)]
+            ax.plot(track.frame.values, y_disp, color=c, alpha=0.6, linewidth=0.8)
+
+        ax.set_title(f"Vial {v}", fontsize=10)
+        ax.set_xlabel("Frame", fontsize=8)
+        ax.set_ylabel("Y disp (px)", fontsize=8)
+
+    for v in range(vials, nrows * ncols):
+        row, col = divmod(v, ncols)
+        axes[row][col].set_visible(False)
+
+    fig.tight_layout()
+    return fig
 
 
 def save_figure(fig, path: str, formats: list = None):

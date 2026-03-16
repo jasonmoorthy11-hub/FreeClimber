@@ -5,6 +5,7 @@ Designed for non-technical lab members: sliders, tooltips, drag-and-drop,
 dark mode, progressive disclosure.
 """
 
+import json
 import logging
 import os
 import re
@@ -424,13 +425,15 @@ class FreeClimberApp(ctk.CTk):
         self._roi_press = False
         self._roi_x0 = self._roi_y0 = 0
         self._roi_x1 = self._roi_y1 = 0
-        self.recent_files = []
+        self.recent_files = self._load_recent()
         self._log_visible = False
         self._analysis_lock = threading.Lock()
 
         self._build_menu_bar()
         self._build_layout()
         self._bind_shortcuts()
+        self._restore_window_state()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         # Status bar
         sep = ctk.CTkFrame(self, height=1, fg_color=C["border"])
@@ -502,6 +505,9 @@ class FreeClimberApp(ctk.CTk):
         menubar = tk.Menu(self)
         file_menu = tk.Menu(menubar, tearoff=0)
         file_menu.add_command(label="Open Video\u2026  \u2318O", command=self._browse_video)
+        self._recent_menu = tk.Menu(file_menu, tearoff=0)
+        file_menu.add_cascade(label="Recent", menu=self._recent_menu)
+        self._update_recent_menu()
         file_menu.add_command(label="Load Config\u2026", command=self._load_config)
         file_menu.add_command(label="Save Config\u2026  \u2318S", command=self._save_config)
         file_menu.add_separator()
@@ -510,7 +516,7 @@ class FreeClimberApp(ctk.CTk):
         file_menu.add_separator()
         file_menu.add_command(label="Load Results\u2026  \u2318L", command=self._load_results)
         file_menu.add_separator()
-        file_menu.add_command(label="Quit  \u2318Q", command=self.destroy)
+        file_menu.add_command(label="Quit  \u2318Q", command=self._on_close)
         menubar.add_cascade(label="File", menu=file_menu)
 
         view_menu = tk.Menu(menubar, tearoff=0)
@@ -531,6 +537,146 @@ class FreeClimberApp(ctk.CTk):
         self.bind("<Command-Shift-S>", lambda e: self._save_current_figure())
         self.bind("<Command-l>", lambda e: self._load_results())
         self.bind("<Escape>", lambda e: self._cancel_analysis())
+        self.bind("<Command-p>", lambda e: self._publication_export())
+        self.bind("<Command-k>", lambda e: self._show_command_palette())
+
+    # ------------------------------------------------------------------
+    # Persistence: Recent files + Window state
+    # ------------------------------------------------------------------
+    _FREECLIMBER_DIR = os.path.expanduser('~/.freeclimber')
+
+    def _load_recent(self):
+        path = os.path.join(self._FREECLIMBER_DIR, 'recent.json')
+        try:
+            with open(path) as f:
+                return json.loads(f.read())[:10]
+        except Exception:
+            return []
+
+    def _save_recent(self):
+        os.makedirs(self._FREECLIMBER_DIR, exist_ok=True)
+        path = os.path.join(self._FREECLIMBER_DIR, 'recent.json')
+        try:
+            with open(path, 'w') as f:
+                f.write(json.dumps(self.recent_files[:10]))
+        except Exception:
+            pass
+
+    def _update_recent_menu(self):
+        if not hasattr(self, '_recent_menu'):
+            return
+        self._recent_menu.delete(0, 'end')
+        for p in self.recent_files:
+            self._recent_menu.add_command(
+                label=os.path.basename(p),
+                command=lambda path=p: self._open_video(path))
+
+    def _restore_window_state(self):
+        path = os.path.join(self._FREECLIMBER_DIR, 'window_state.json')
+        try:
+            with open(path) as f:
+                state = json.loads(f.read())
+            geo = state.get('geometry', '')
+            if geo:
+                try:
+                    parts = geo.replace('+', 'x').split('x')
+                    _, _, x, y = int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])
+                    sw = self.winfo_screenwidth()
+                    sh = self.winfo_screenheight()
+                    if 0 <= x < sw - 100 and 0 <= y < sh - 100:
+                        self.geometry(geo)
+                except (ValueError, IndexError):
+                    pass
+        except Exception:
+            pass
+
+    def _save_window_state(self):
+        os.makedirs(self._FREECLIMBER_DIR, exist_ok=True)
+        path = os.path.join(self._FREECLIMBER_DIR, 'window_state.json')
+        try:
+            state = {
+                'geometry': self.geometry(),
+                'log_visible': self._log_visible,
+            }
+            try:
+                state['active_tab'] = self.tabview.get()
+            except Exception:
+                pass
+            with open(path, 'w') as f:
+                f.write(json.dumps(state))
+        except Exception:
+            pass
+
+    def _on_close(self):
+        self._save_window_state()
+        self._save_recent()
+        self.destroy()
+
+    # ------------------------------------------------------------------
+    # Command Palette
+    # ------------------------------------------------------------------
+    def _show_command_palette(self):
+        win = ctk.CTkToplevel(self)
+        win.title("")
+        win.geometry("400x350")
+        win.transient(self)
+        win.configure(fg_color=C["bg"])
+        win.attributes('-alpha', 0.95)
+
+        search_var = ctk.StringVar()
+        entry = ctk.CTkEntry(win, textvariable=search_var,
+                             placeholder_text="Type a command...",
+                             fg_color=C["bg_card"], text_color=C["text"],
+                             font=(FONT_FAMILY, 14), height=40)
+        entry.pack(fill="x", padx=S["md"], pady=(S["md"], S["sm"]))
+        entry.focus_set()
+
+        scroll = ctk.CTkScrollableFrame(win, fg_color=C["bg_card"])
+        scroll.pack(fill="both", expand=True, padx=S["md"], pady=(0, S["md"]))
+
+        actions = [
+            ("Open Video", self._browse_video),
+            ("Run Analysis", self._run_analysis),
+            ("Test Parameters", self._test_parameters),
+            ("Export Results", self._export_dialog),
+            ("Quick Export", self._quick_export),
+            ("Publication Export", self._publication_export),
+            ("Batch Mode", self._batch_mode),
+            ("Save Config", self._save_config),
+            ("Load Results", self._load_results),
+            ("Copy Methods", self._copy_methods),
+        ]
+
+        buttons = []
+
+        def _update_list(*_args):
+            query = search_var.get().lower()
+            for btn in buttons:
+                btn.destroy()
+            buttons.clear()
+            for name, cmd in actions:
+                if query and not all(c in name.lower() for c in query.split()):
+                    continue
+                def _run(c=cmd):
+                    win.destroy()
+                    c()
+                btn = ctk.CTkButton(scroll, text=name, anchor="w",
+                                    fg_color="transparent", hover_color=C["bg_hover"],
+                                    text_color=C["text"], font=(FONT_FAMILY, 12),
+                                    command=_run, height=32)
+                btn.pack(fill="x", pady=1)
+                buttons.append(btn)
+
+        search_var.trace_add("write", _update_list)
+        _update_list()
+
+        def _on_enter(e):
+            if buttons:
+                buttons[0].invoke()
+
+        entry.bind("<Return>", _on_enter)
+        win.bind("<Escape>", lambda e: win.destroy())
+        win.grab_set()
 
     # ------------------------------------------------------------------
     # Layout
@@ -776,6 +922,60 @@ class FreeClimberApp(ctk.CTk):
             text_color=C["text"], corner_radius=8,
             font=(FONT_FAMILY, 11), command=self._copy_methods,
         ).pack(side="left")
+
+        btn_row2 = ctk.CTkFrame(self.step4_card.body, fg_color="transparent")
+        btn_row2.pack(fill="x", pady=(0, S["xs"]))
+        ctk.CTkButton(
+            btn_row2, text="Quick Export", width=100,
+            fg_color=C["accent"], hover_color=C["accent_hover"],
+            text_color=C["bg"], corner_radius=8,
+            font=(FONT_FAMILY, 11), command=self._quick_export,
+        ).pack(side="left")
+
+        # ============================================================
+        # EXPERIMENT INFO (metadata form)
+        # ============================================================
+        meta_card = CollapsibleCard(sidebar, icon="\u2139", title="EXPERIMENT INFO", initially_open=False)
+        meta_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
+
+        self._experiment_metadata = {}
+        self._meta_entries = {}
+        for field_name, label in [('genotype', 'Genotype'), ('age', 'Age'),
+                                   ('sex', 'Sex'), ('temperature', 'Temp (\u00b0C)'),
+                                   ('experimenter', 'Experimenter')]:
+            row = ctk.CTkFrame(meta_card.body, fg_color="transparent")
+            row.pack(fill="x", pady=1)
+            ctk.CTkLabel(row, text=label, width=80, anchor="w",
+                         font=(FONT_FAMILY, 11), text_color=C["text_dim"]).pack(side="left")
+            if field_name == 'sex':
+                var = ctk.StringVar(value="Mixed")
+                ctk.CTkOptionMenu(row, variable=var, values=["M", "F", "Mixed"],
+                                  width=120, fg_color=C["bg_hover"],
+                                  button_color=C["bg_hover"],
+                                  font=(FONT_FAMILY, 11)).pack(side="left", fill="x", expand=True)
+                self._meta_entries[field_name] = var
+            else:
+                entry = ctk.CTkEntry(row, fg_color=C["bg_hover"],
+                                     text_color=C["text"], font=(FONT_FAMILY, 11))
+                entry.pack(side="left", fill="x", expand=True)
+                self._meta_entries[field_name] = entry
+
+        # ============================================================
+        # HISTORY (collapsed)
+        # ============================================================
+        history_card = CollapsibleCard(sidebar, icon="\ud83d\udcca", title="HISTORY", initially_open=False)
+        history_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
+
+        self._history_frame = ctk.CTkScrollableFrame(
+            history_card.body, fg_color="transparent", height=150)
+        self._history_frame.pack(fill="x")
+
+        ctk.CTkButton(
+            history_card.body, text="Refresh", width=70,
+            fg_color=C["bg_hover"], hover_color=C["border"],
+            text_color=C["text"], corner_radius=6,
+            font=(FONT_FAMILY, 10), command=self._load_history,
+        ).pack(anchor="w", pady=(S["xs"], 0))
 
         # ============================================================
         # ADVANCED SETTINGS (collapsed)
@@ -1271,7 +1471,7 @@ class FreeClimberApp(ctk.CTk):
         )
         self.individual_subtabs.grid(row=0, column=0, sticky="nsew")
 
-        for name in ["Trajectory Overlay", "Metrics Heatmap", "Speed Curves"]:
+        for name in ["Trajectory Overlay", "Metrics Heatmap", "Speed Curves", "Small Multiples"]:
             sub = self.individual_subtabs.add(name)
             sub.grid_rowconfigure(0, weight=1)
             sub.grid_columnconfigure(0, weight=1)
@@ -1603,6 +1803,8 @@ class FreeClimberApp(ctk.CTk):
         if path not in self.recent_files:
             self.recent_files.insert(0, path)
             self.recent_files = self.recent_files[:10]
+        self._save_recent()
+        self._update_recent_menu()
 
         self.status_var.set(f"Loaded: {name_ext}")
         self._preview_done = False
@@ -2035,9 +2237,15 @@ class FreeClimberApp(ctk.CTk):
         # Speed chart (left) — per-vial bar chart
         if groups:
             try:
-                from output.figures import bar_chart_with_points
+                from output.figures import bar_chart_with_points, enable_hover
                 bar_chart_with_points(groups, ylabel='Climbing Speed',
                                       title='Climbing Speed by Vial', ax=ax_speed)
+                scatters = [c for c in ax_speed.collections]
+                if scatters:
+                    labels = []
+                    for name, vals in groups.items():
+                        labels.extend([f"{name}: {v:.3f}" for v in vals])
+                    enable_hover(fig, scatters, [labels])
             except Exception as e:
                 logger.error("Speed chart failed: %s", e, exc_info=True)
                 ax_speed.text(0.5, 0.5, f"Error: {e}", transform=ax_speed.transAxes,
@@ -2278,9 +2486,41 @@ class FreeClimberApp(ctk.CTk):
         else:
             _unavailable_msg(speed_fig, speed_canvas, "Speed curves")
 
+        # Small multiples
+        sm_fig, sm_canvas = self._ensure_fig('small_multiples', self._individual_sub_widgets["Small Multiples"])
+        sm_fig.clear()
+        if has_tracking and raw_df is not None and 'particle' in raw_df.columns:
+            try:
+                from output.figures import small_multiples_trajectories
+                n_vials = result.get('vials', raw_df['vial'].nunique() if 'vial' in raw_df.columns else 1)
+                new_fig = small_multiples_trajectories(raw_df, n_vials)
+                # Copy axes from generated figure to our managed figure
+                sm_fig.clear()
+                for i, src_ax in enumerate(new_fig.axes):
+                    nrows = max(1, (n_vials + 4) // 5)
+                    ncols = min(n_vials, 5)
+                    dest_ax = sm_fig.add_subplot(nrows, ncols, i + 1)
+                    for line in src_ax.get_lines():
+                        dest_ax.plot(line.get_xdata(), line.get_ydata(),
+                                     color=line.get_color(), alpha=line.get_alpha(),
+                                     linewidth=line.get_linewidth())
+                    dest_ax.set_title(src_ax.get_title(), fontsize=10)
+                    dest_ax.set_xlabel(src_ax.get_xlabel(), fontsize=8)
+                    dest_ax.set_ylabel(src_ax.get_ylabel(), fontsize=8)
+                plt.close(new_fig)
+                sm_fig.tight_layout()
+            except Exception as e:
+                logger.error("Small multiples failed: %s", e, exc_info=True)
+                sm_fig.clear()
+                ax = sm_fig.add_subplot(111)
+                ax.text(0.5, 0.5, f"Error: {e}", transform=ax.transAxes,
+                    ha='center', va='center', fontsize=9, color=C["danger"], wrap=True)
+        else:
+            _unavailable_msg(sm_fig, sm_canvas, "Small multiples")
+
         # Defer all individual draws to tab switch
         self._pending_draws.setdefault("Individual Flies", []).extend(
-            [overlay_canvas, heatmap_canvas, speed_canvas])
+            [overlay_canvas, heatmap_canvas, speed_canvas, sm_canvas])
 
     def _update_pop_stats_text(self, pop):
         self.pop_stats_text.configure(state="normal")
@@ -2460,6 +2700,18 @@ class FreeClimberApp(ctk.CTk):
         # --- Formatted text ---
         lines = ["\u2550" * 50, "  STATISTICAL ANALYSIS", "\u2550" * 50, ""]
 
+        # Guided statistics recommendation
+        n_groups = len(groups) if groups else 0
+        if n_groups == 0:
+            lines.append("  \u2139 No groups detected \u2014 showing descriptive statistics only")
+        elif n_groups == 1:
+            lines.append("  \u2139 Single group detected \u2014 showing descriptive statistics only")
+        elif n_groups == 2:
+            lines.append("  \u2139 2 groups detected \u2014 recommending t-test (or Mann-Whitney if non-normal)")
+        else:
+            lines.append(f"  \u2139 {n_groups} groups detected \u2014 recommending ANOVA (or Kruskal-Wallis if non-normal)")
+        lines.append("")
+
         # Read dropdown selections
         test_choice = getattr(self, 'stats_test_var', None)
         test_choice = test_choice.get() if test_choice else "Auto-detect"
@@ -2540,13 +2792,29 @@ class FreeClimberApp(ctk.CTk):
                     lines.append(f"  {'Group 1':<12} {'Group 2':<12} {'p-value':<10} {'Sig':<5} {'d':<8}")
                     sep = "\u2500"
                     lines.append(f"  {sep*12} {sep*12} {sep*10} {sep*5} {sep*8}")
+                    sig_dict = {}
                     for comp in post_hoc:
                         lines.append(
                             f"  {comp['group1']:<12} {comp['group2']:<12} "
                             f"{comp['p_value']:<10.6f} {comp['significance']:<5} "
                             f"{comp['effect_size_d']:<8.3f}"
                         )
+                        if comp['significance'] != 'ns':
+                            sig_dict[(comp['group1'], comp['group2'])] = comp['significance']
                     lines.append("")
+
+                    if sig_dict and hasattr(self, 'stats_fig'):
+                        try:
+                            self.stats_fig.clear()
+                            ax = self.stats_fig.add_subplot(111)
+                            from output.figures import raincloud_plot
+                            raincloud_plot(dist_groups, ylabel=slope_col,
+                                           title="Distribution by Group",
+                                           significance=sig_dict, ax=ax)
+                            self.stats_fig.tight_layout()
+                            self.stats_canvas.draw()
+                        except Exception as e:
+                            logger.debug("Significance bracket redraw failed: %s", e)
 
             lines.append("\u25b6 GROUP SUMMARIES")
             lines.append("\u2500" * 40)
@@ -2620,6 +2888,88 @@ class FreeClimberApp(ctk.CTk):
     # ------------------------------------------------------------------
     # Export
     # ------------------------------------------------------------------
+    def _load_history(self):
+        for child in self._history_frame.winfo_children():
+            child.destroy()
+        try:
+            from output.database import init_db, query_experiments, query_slopes
+            conn = init_db()
+            exps = query_experiments(conn)
+            if exps.empty:
+                ctk.CTkLabel(self._history_frame, text="No experiments yet",
+                             font=(FONT_FAMILY, 10), text_color=C["text_dim"]).pack()
+                conn.close()
+                return
+
+            for _, exp in exps.head(20).iterrows():
+                row = ctk.CTkFrame(self._history_frame, fg_color=C["bg_hover"],
+                                   corner_radius=6)
+                row.pack(fill="x", pady=2)
+                date_str = str(exp.get('date', ''))[:10]
+                name = str(exp.get('name', 'unnamed'))
+                n_vids = int(exp.get('n_videos', 0))
+                ctk.CTkLabel(row, text=f"{name}  ({date_str}, {n_vids} vid)",
+                             font=(FONT_FAMILY, 10), text_color=C["text"],
+                             cursor="hand2").pack(anchor="w", padx=S["xs"], pady=2)
+                exp_id = int(exp['id'])
+                row.bind("<Button-1>", lambda e, eid=exp_id, c=conn: self._load_experiment(eid))
+            conn.close()
+        except Exception as e:
+            logger.warning("History load failed: %s", e)
+            ctk.CTkLabel(self._history_frame, text="Could not load history",
+                         font=(FONT_FAMILY, 10), text_color=C["danger"]).pack()
+
+    def _load_experiment(self, experiment_id):
+        try:
+            from output.database import init_db, query_slopes
+            conn = init_db()
+            slopes = query_slopes(conn, experiment_id)
+            conn.close()
+            if not slopes.empty:
+                result = {'slopes_df': slopes}
+                self._populate_results(result)
+                self._populate_statistics(result)
+                self.tabview.set("Results")
+                self._on_result_tab_changed()
+                self._toast("Loaded experiment from history", level="success")
+        except Exception as e:
+            logger.error("Load experiment failed: %s", e, exc_info=True)
+            self._toast(f"Load failed: {e}", level="error")
+
+    def _collect_metadata(self):
+        meta = {}
+        for field, widget in self._meta_entries.items():
+            if isinstance(widget, ctk.StringVar):
+                meta[field] = widget.get()
+            else:
+                meta[field] = widget.get()
+        self._experiment_metadata = meta
+        return meta
+
+    def _quick_export(self):
+        if self.controller.get_slopes() is None:
+            self._toast("Run analysis first", level="error")
+            return
+
+        video_dir = os.path.dirname(self.controller.video_path or '')
+        if not video_dir:
+            self._toast("No video directory", level="error")
+            return
+
+        stem = os.path.splitext(os.path.basename(self.controller.video_path))[0]
+        csv_path = os.path.join(video_dir, f"{stem}_slopes.csv")
+        png_path = os.path.join(video_dir, f"{stem}_results.png")
+
+        try:
+            self.controller.export_results('csv', csv_path)
+            fig = self._get_active_figure()
+            if fig:
+                fig.savefig(png_path, dpi=300, bbox_inches='tight')
+            self._toast(f"Quick exported to {os.path.basename(video_dir)}/", level="success")
+        except Exception as e:
+            logger.error("Quick export failed: %s", e, exc_info=True)
+            self._toast(f"Export failed: {e}", level="error")
+
     def _export_dialog(self):
         if self.controller.get_slopes() is None:
             messagebox.showinfo("FreeClimber", "Run analysis first to have results to export.")
@@ -2810,13 +3160,73 @@ class FreeClimberApp(ctk.CTk):
             self._populate_statistics(result)
             self.tabview.set("Results")
             self._on_result_tab_changed()
-            self.status_var.set(f"Batch complete: {len(combined)} rows")
+
+        statuses = getattr(self.controller, '_batch_statuses', [])
+        n_total = len(statuses)
+        n_fail = sum(1 for s in statuses if not s['success'])
+        if n_fail == 0:
+            self._toast(f"Batch complete: {n_total} videos processed", level="success")
         else:
-            self.status_var.set("Batch complete: no results")
+            self._toast(f"Batch: {n_fail}/{n_total} failed", level="error", duration=8000)
+            self._show_batch_failures(statuses)
+
+    def _show_batch_failures(self, statuses):
+        failed = [s for s in statuses if not s['success']]
+        if not failed:
+            return
+
+        win = ctk.CTkToplevel(self)
+        win.title("Batch Failures")
+        win.geometry("500x300")
+        win.transient(self)
+        win.configure(fg_color=C["bg"])
+
+        ctk.CTkLabel(win, text="Failed Videos", font=F["h2"],
+                     text_color=C["danger"]).pack(pady=(S["md"], S["sm"]))
+
+        scroll = ctk.CTkScrollableFrame(win, fg_color=C["bg_card"])
+        scroll.pack(fill="both", expand=True, padx=S["md"], pady=(0, S["sm"]))
+
+        for s in failed:
+            row = ctk.CTkFrame(scroll, fg_color="transparent")
+            row.pack(fill="x", pady=2)
+            ctk.CTkLabel(row, text=os.path.basename(s['path']),
+                         font=(FONT_FAMILY, 11, "bold"),
+                         text_color=C["text"]).pack(anchor="w")
+            ctk.CTkLabel(row, text=str(s.get('error', 'Unknown error')),
+                         font=(FONT_FAMILY, 10), text_color=C["danger"],
+                         wraplength=450).pack(anchor="w")
+
+        def _retry():
+            win.destroy()
+            failed_paths = [s['path'] for s in failed]
+            self._run_batch_with_paths(failed_paths)
+
+        ctk.CTkButton(win, text="Retry Failed", fg_color=C["accent"],
+                      hover_color=C["accent_hover"], text_color=C["bg"],
+                      command=_retry).pack(pady=S["sm"])
+
+    def _run_batch_with_paths(self, paths):
+        params = self._collect_params()
+        self.run_btn.configure(state="disabled")
+        self.status_var.set(f"Retry batch: 0/{len(paths)} videos...")
+        self.progress_bar.set(0)
+
+        def progress(i, total, path, status):
+            self.after(0, lambda: self._batch_progress(i, total, path, status))
+
+        def worker():
+            try:
+                combined = self.controller.run_batch(paths, params, progress_callback=progress)
+                self.after(0, lambda c=combined: self._batch_done(c))
+            except Exception as ex:
+                self.after(0, lambda msg=str(ex): self._batch_error(msg))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _batch_error(self, msg):
         self.run_btn.configure(state="normal")
-        messagebox.showerror("Batch Error", msg)
+        self._toast(f"Batch error: {msg}", level="error")
 
     # ------------------------------------------------------------------
     # Methods paragraph
@@ -2839,6 +3249,7 @@ class FreeClimberApp(ctk.CTk):
                 font=F["body"], relief="flat", borderwidth=1)
             menu.add_command(label="Save Figure As\u2026", command=lambda: self._save_figure_dialog(fig))
             menu.add_command(label="Copy to Clipboard", command=lambda: self._copy_figure_to_clipboard(fig))
+            menu.add_command(label="Publication Export\u2026", command=lambda: self._publication_export(fig))
             menu.add_separator()
             menu.add_command(label="Reset View", command=lambda: self._reset_figure_view(fig, canvas))
             menu.post(event.x_root, event.y_root)
@@ -2880,6 +3291,62 @@ class FreeClimberApp(ctk.CTk):
         else:
             self.status_var.set("No figure to save")
 
+    def _publication_export(self, fig=None):
+        if fig is None:
+            fig = self._get_active_figure()
+        if fig is None:
+            self._toast("No figure to export", level="error")
+            return
+
+        path = filedialog.asksaveasfilename(
+            title="Publication Export",
+            defaultextension=".pdf",
+            filetypes=[("PDF", "*.pdf"), ("TIFF", "*.tiff"), ("Both PDF+TIFF", "*.pdf")],
+        )
+        if not path:
+            return
+
+        try:
+            plt.rcParams.update(EXPORT_STYLE)
+            for ax in fig.axes:
+                for spine in ax.spines.values():
+                    spine.set_edgecolor('#333333')
+                ax.tick_params(colors='#333333')
+                ax.xaxis.label.set_color('#000000')
+                ax.yaxis.label.set_color('#000000')
+                ax.title.set_color('#000000')
+            fig.set_facecolor('#ffffff')
+            for ax in fig.axes:
+                ax.set_facecolor('#ffffff')
+
+            orig_size = fig.get_size_inches()
+            fig.set_size_inches(3.5, 2.5)  # 89mm x 64mm Nature single column
+
+            fig.savefig(path, format='pdf', dpi=300, bbox_inches='tight')
+            tiff_path = path.rsplit('.', 1)[0] + '.tiff'
+            fig.savefig(tiff_path, format='tiff', dpi=300, bbox_inches='tight')
+
+            self._toast(f"Publication export: {os.path.basename(path)}", level="success")
+        except Exception as e:
+            logger.error("Publication export failed: %s", e, exc_info=True)
+            self._toast(f"Export failed: {e}", level="error")
+        finally:
+            fig.set_size_inches(orig_size)
+            plt.rcParams.update(PLOT_STYLE)
+            fig.set_facecolor(C["bg"])
+            for ax in fig.axes:
+                ax.set_facecolor(C["bg"])
+                for spine in ax.spines.values():
+                    spine.set_edgecolor(PLOT_STYLE.get('axes.edgecolor', '#555555'))
+                ax.tick_params(colors=PLOT_STYLE.get('xtick.color', '#cccccc'))
+                ax.xaxis.label.set_color(PLOT_STYLE.get('axes.labelcolor', '#cccccc'))
+                ax.yaxis.label.set_color(PLOT_STYLE.get('axes.labelcolor', '#cccccc'))
+                ax.title.set_color(PLOT_STYLE.get('text.color', '#e0e0e0'))
+            try:
+                fig.canvas.draw()
+            except Exception:
+                pass
+
     def _get_active_figure(self):
         try:
             active_tab = self.tabview.get()
@@ -2910,6 +3377,7 @@ class FreeClimberApp(ctk.CTk):
                         "Trajectory Overlay": self.overlay_fig,
                         "Metrics Heatmap": self.heatmap_fig,
                         "Speed Curves": self.speed_curves_fig,
+                        "Small Multiples": self.small_multiples_fig,
                     }
                     return sub_map.get(sub, self.overlay_fig)
                 except Exception:

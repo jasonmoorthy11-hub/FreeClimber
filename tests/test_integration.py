@@ -24,6 +24,44 @@ def _find_example_video():
     return None
 
 
+class TestSyntheticPipeline:
+    """Run detector pipeline on synthetic video — no real video needed."""
+
+    def test_pipeline_produces_slopes(self, synthetic_video_path, tmp_path):
+        from config import save_config
+        from detector import detector
+
+        cfg = {
+            'x': 0, 'y': 0, 'w': 320, 'h': 240,
+            'check_frame': 0, 'blank_0': 0, 'blank_n': 9,
+            'crop_0': 0, 'crop_n': 9,
+            'threshold': 'auto', 'diameter': 5, 'minmass': 10,
+            'maxsize': 15, 'ecc_low': 0.0, 'ecc_high': 1.0,
+            'vials': 3, 'window': 5, 'pixel_to_cm': 46.0,
+            'frame_rate': 30, 'vial_id_vars': 2,
+            'outlier_TB': 5.0, 'outlier_LR': 5.0,
+            'naming_convention': 'geno_sex_day_rep',
+            'path_project': str(tmp_path),
+            'file_suffix': 'mp4',
+            'convert_to_cm_sec': False,
+            'trim_outliers': False,
+        }
+        cfg_path = str(tmp_path / 'synthetic.cfg')
+        save_config(cfg_path, cfg, video_file=synthetic_video_path)
+
+        d = detector(video_file=synthetic_video_path, config_file=cfg_path)
+        d.step_1(gui=False)
+        d.step_2()
+        d.step_3(gui=False)
+        d.step_4()
+        d.step_5()
+        d.step_6(gui=False)
+        d.step_7()
+
+        assert hasattr(d, 'df_slopes')
+        assert len(d.df_slopes) >= 1
+
+
 @pytest.mark.slow
 class TestFullPipeline:
     """Run detector pipeline on example video, check slopes match known-good values."""

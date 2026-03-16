@@ -29,10 +29,10 @@ VIAL_COLORS_BGR = [
 def export_annotated_video(
     video_path: str,
     output_path: str,
-    positions_df: pd.DataFrame | None = None,
-    roi: tuple | None = None,
+    positions_df: pd.DataFrame = None,
+    roi: tuple = None,
     vials: int = 1,
-    fps: float | None = None,
+    fps: float = None,
     trail_length: int = 10,
     show_particles: bool = True,
     show_roi: bool = True,
@@ -166,9 +166,9 @@ def export_annotated_video(
 def export_annotated_stills(
     video_path: str,
     output_dir: str,
-    frames: list[int] | None = None,
-    positions_df: pd.DataFrame | None = None,
-    roi: tuple | None = None,
+    frames=None,
+    positions_df: pd.DataFrame = None,
+    roi: tuple = None,
     vials: int = 1,
 ):
     """Export specific frames as annotated PNG stills.
@@ -212,7 +212,7 @@ def export_annotated_stills(
     cap.release()
 
 
-def _pick_col(cols_lower: dict, *candidates) -> str | None:
+def _pick_col(cols_lower, *candidates):
     for c in candidates:
         if c in cols_lower:
             return cols_lower[c]

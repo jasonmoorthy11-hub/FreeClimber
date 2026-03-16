@@ -3,6 +3,7 @@
 import os
 import tempfile
 
+import cv2
 import numpy as np
 import pandas as pd
 import pytest
@@ -93,3 +94,27 @@ def three_groups():
         'mutant_a': np.random.normal(0.3, 0.12, 12),
         'mutant_b': np.random.normal(0.4, 0.08, 14),
     }
+
+
+@pytest.fixture
+def synthetic_video_path(tmp_path):
+    """30-frame 320x240 mp4 with bright dots moving upward in 3 columns (simulating 3 vials)."""
+    path = str(tmp_path / "synthetic.mp4")
+    h, w, n_frames = 240, 320, 30
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    writer = cv2.VideoWriter(path, fourcc, 30.0, (w, h))
+
+    col_positions = [80, 160, 240]
+    for frame_idx in range(n_frames):
+        img = np.zeros((h, w), dtype=np.uint8)
+        for col_x in col_positions:
+            for dot in range(5):
+                y = h - 30 - dot * 35 - frame_idx * 2
+                if 5 <= y < h - 5:
+                    cv2.circle(img, (col_x, y), 6, 255, -1)
+                    cv2.circle(img, (col_x, y), 3, 200, -1)
+        bgr = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        writer.write(bgr)
+
+    writer.release()
+    return path

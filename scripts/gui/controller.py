@@ -41,7 +41,7 @@ class AnalysisController:
     # ------------------------------------------------------------------
     # Video loading
     # ------------------------------------------------------------------
-    def load_video(self, path: str, params: dict | None = None) -> dict:
+    def load_video(self, path: str, params: dict = None) -> dict:
         """Load a video file and return metadata.
 
         Returns dict with keys: n_frames, width, height, fps, first_frame, last_frame
@@ -227,6 +227,12 @@ class AnalysisController:
         except Exception as e:
             logger.warning("Database save failed: %s", e)
 
+        try:
+            from output.provenance import save_provenance
+            save_provenance(self.video_path, params, self.slopes_df)
+        except Exception as e:
+            logger.warning("Provenance save failed: %s", e)
+
     # ------------------------------------------------------------------
     # Pipeline-only (no plotting) for threaded analysis
     # ------------------------------------------------------------------
@@ -307,10 +313,10 @@ class AnalysisController:
     # ------------------------------------------------------------------
     # Export helpers
     # ------------------------------------------------------------------
-    def get_slopes(self) -> pd.DataFrame | None:
+    def get_slopes(self) -> pd.DataFrame:
         return self.slopes_df
 
-    def get_positions(self) -> pd.DataFrame | None:
+    def get_positions(self) -> pd.DataFrame:
         return self.positions_df
 
     def export_results(self, fmt: str, path: str):
@@ -400,7 +406,7 @@ class AnalysisController:
         self.config = params
         return params
 
-    def list_profiles(self) -> list[str]:
+    def list_profiles(self) -> list:
         """Return list of saved profile names."""
         if not os.path.isdir(self.PROFILES_DIR):
             return []
@@ -417,7 +423,7 @@ class AnalysisController:
     # ------------------------------------------------------------------
     # Batch mode
     # ------------------------------------------------------------------
-    def run_batch(self, video_paths: list[str], params: dict,
+    def run_batch(self, video_paths: list, params: dict,
                   progress_callback=None) -> pd.DataFrame:
         """Run pipeline on multiple videos, return combined results.
 
@@ -467,7 +473,7 @@ class AnalysisController:
     # Internals
     # ------------------------------------------------------------------
     @staticmethod
-    def _params_to_variables(params: dict) -> list[str]:
+    def _params_to_variables(params: dict) -> list:
         """Convert a params dict to the variable list format detector expects."""
         variables = []
         for key, val in params.items():

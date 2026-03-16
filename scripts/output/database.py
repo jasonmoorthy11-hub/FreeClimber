@@ -202,3 +202,15 @@ def query_slopes(conn: sqlite3.Connection, experiment_id: int = None) -> pd.Data
     if experiment_id:
         query += f" WHERE e.id = {experiment_id}"
     return pd.read_sql_query(query, conn)
+
+
+def query_fly_tracks(conn, video_id):
+    """Get fly tracks for a specific video."""
+    return pd.read_sql_query(
+        "SELECT * FROM fly_tracks WHERE video_id = ?", conn, params=(video_id,))
+
+
+def query_stats_results(conn, experiment_id):
+    """Get stats results for a specific experiment."""
+    return pd.read_sql_query(
+        "SELECT * FROM stats_results WHERE experiment_id = ?", conn, params=(experiment_id,))

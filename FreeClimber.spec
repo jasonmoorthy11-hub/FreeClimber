@@ -6,7 +6,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[('scripts', 'scripts')],
-    hiddenimports=['customtkinter', 'PIL', 'cv2', 'trackpy', 'scipy', 'scipy.signal', 'scipy.stats', 'scipy.ndimage', 'scipy.optimize', 'scipy.interpolate', 'pandas', 'matplotlib', 'numpy'],
+    hiddenimports=['customtkinter', 'PIL', 'cv2', 'trackpy', 'scipy', 'scipy.signal', 'scipy.stats', 'scipy.ndimage', 'scipy.optimize', 'scipy.interpolate', 'pandas', 'matplotlib', 'numpy', 'scripts.analysis.metrics', 'scripts.analysis.stats', 'scripts.analysis.quality', 'scripts.analysis.normalization', 'scripts.output.export', 'scripts.output.figures', 'scripts.output.database', 'scripts.output.reports', 'scripts.output.video', 'scripts.gui.controller'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -47,5 +47,5 @@ app = BUNDLE(
     coll,
     name='FreeClimber.app',
     icon='FreeClimber.icns',
-    bundle_identifier=None,
+    bundle_identifier='com.jasonmoorthy.freeclimber',
 )
