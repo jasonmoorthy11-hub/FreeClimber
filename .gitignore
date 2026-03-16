@@ -5,6 +5,7 @@ __pycache__/
 dist/
 build/
 *.egg
+*.pyo
 
 # Virtual environments
 .venv/
@@ -16,13 +17,26 @@ env/
 .idea/
 *.swp
 *.swo
+.project
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Testing / CI
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+coverage.xml
+.coverage
 
 # Logs
 *.log
 
 # Data (user-specific)
 Data/
+*.sqlite
+
+# PyInstaller
+*.spec.bak

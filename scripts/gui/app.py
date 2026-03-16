@@ -443,6 +443,58 @@ class FreeClimberApp(ctk.CTk):
         )
         self.status_bar.pack(side="bottom", fill="x", padx=S["md"], pady=(S["xs"], S["xs"]))
 
+        self._toast_stack: list[ctk.CTkFrame] = []
+
+    # ------------------------------------------------------------------
+    # Toast notifications
+    # ------------------------------------------------------------------
+    def _toast(self, message: str, level: str = "info", duration: int = 4000):
+        """Show a brief toast notification in the bottom-right corner.
+
+        level: 'success', 'error', 'info'
+        """
+        border_colors = {"success": C["success"], "error": C["danger"], "info": C["accent"]}
+        border_color = border_colors.get(level, C["accent"])
+
+        toast = ctk.CTkFrame(self, fg_color=C["bg_hover"], corner_radius=8,
+                              border_width=0, width=320, height=40)
+        toast.pack_propagate(False)
+
+        inner = ctk.CTkFrame(toast, fg_color="transparent")
+        inner.pack(fill="both", expand=True, padx=0, pady=0)
+
+        accent_bar = ctk.CTkFrame(inner, fg_color=border_color, width=3,
+                                   corner_radius=0)
+        accent_bar.pack(side="left", fill="y")
+
+        ctk.CTkLabel(inner, text=message, font=(FONT_FAMILY, 11),
+                      text_color=C["text"], anchor="w", wraplength=280,
+                      ).pack(side="left", padx=S["sm"], pady=S["xs"], fill="x", expand=True)
+
+        close_btn = ctk.CTkLabel(inner, text="\u2715", font=(FONT_FAMILY, 11),
+                                  text_color=C["text_dim"], cursor="hand2", width=20)
+        close_btn.pack(side="right", padx=S["xs"])
+        close_btn.bind("<Button-1>", lambda e, t=toast: self._dismiss_toast(t))
+
+        self._toast_stack.append(toast)
+        self._reposition_toasts()
+
+        if level != "error":
+            toast.after(duration, lambda: self._dismiss_toast(toast))
+
+    def _dismiss_toast(self, toast):
+        if toast in self._toast_stack:
+            self._toast_stack.remove(toast)
+            toast.place_forget()
+            toast.destroy()
+            self._reposition_toasts()
+
+    def _reposition_toasts(self):
+        y_offset = 50
+        for t in reversed(self._toast_stack):
+            t.place(relx=1.0, rely=1.0, x=-16, y=-y_offset, anchor="se")
+            y_offset += 48
+
     # ------------------------------------------------------------------
     # Menu / shortcuts
     # ------------------------------------------------------------------
@@ -985,22 +1037,41 @@ class FreeClimberApp(ctk.CTk):
         tab.grid_rowconfigure(2, weight=2)
         tab.grid_columnconfigure(0, weight=1)
 
-        # --- Summary card at top ---
-        self.summary_frame = ctk.CTkFrame(tab, fg_color=C["bg_card"], corner_radius=8)
+        # --- KPI summary cards at top ---
+        self.summary_frame = ctk.CTkFrame(tab, fg_color="transparent")
         self.summary_frame.grid(row=0, column=0, sticky="ew", padx=S["xs"], pady=(S["xs"], S["xs"]))
-        summary_inner = ctk.CTkFrame(self.summary_frame, fg_color="transparent")
-        summary_inner.pack(fill="x", padx=S["md"], pady=S["sm"])
-        self.summary_label = ctk.CTkLabel(
-            summary_inner, text="Run an analysis to see results here.",
-            font=(FONT_FAMILY, 12), text_color=C["text_dim"], anchor="w",
-        )
-        self.summary_label.pack(side="left", fill="x", expand=True)
+        self.summary_frame.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
+
+        self._kpi_cards = {}
+        kpi_defs = [
+            ("velocity", "Mean Velocity", "--", C["accent"]),
+            ("flies", "Flies Tracked", "--", C["success"]),
+            ("r_squared", "R-squared", "--", C["warning"]),
+            ("quality", "Quality", "--", C["accent"]),
+            ("climbing_idx", "Climbing Idx", "--", C["success"]),
+        ]
+        for col_i, (key, title, default, accent_color) in enumerate(kpi_defs):
+            card = ctk.CTkFrame(self.summary_frame, fg_color=C["bg_card"], corner_radius=8)
+            card.grid(row=0, column=col_i, sticky="nsew", padx=S["xxs"], pady=S["xxs"])
+            ctk.CTkLabel(card, text=title, font=(FONT_FAMILY, 10),
+                         text_color=C["text_dim"]).pack(padx=S["sm"], pady=(S["sm"], 0))
+            val_label = ctk.CTkLabel(card, text=default,
+                                      font=(FONT_FAMILY, 20, "bold"), text_color=accent_color)
+            val_label.pack(padx=S["sm"], pady=(0, S["xxs"]))
+            sub_label = ctk.CTkLabel(card, text="", font=(FONT_FAMILY, 9),
+                                      text_color=C["text_dim"])
+            sub_label.pack(padx=S["sm"], pady=(0, S["sm"]))
+            self._kpi_cards[key] = (val_label, sub_label)
+
+        # Export button row
+        export_row = ctk.CTkFrame(self.summary_frame, fg_color="transparent")
+        export_row.grid(row=1, column=0, columnspan=5, sticky="e", padx=S["xs"], pady=(S["xxs"], 0))
         ctk.CTkButton(
-            summary_inner, text="Export\u2026", width=80,
+            export_row, text="Export\u2026", width=80,
             fg_color=C["accent"], hover_color=C["accent_hover"],
             text_color=C["bg"], font=(FONT_FAMILY, 12, "bold"),
             corner_radius=6, command=self._export_dialog,
-        ).pack(side="right", padx=(S["sm"], 0))
+        ).pack(side="right")
 
         # --- Data table section with sub-tabs ---
         table_outer = ctk.CTkFrame(tab, fg_color=C["bg_card"], corner_radius=8)
@@ -1576,12 +1647,39 @@ class FreeClimberApp(ctk.CTk):
     # ------------------------------------------------------------------
     # Full analysis (threaded pipeline, main-thread plotting)
     # ------------------------------------------------------------------
+    def _validate_params(self) -> list[str]:
+        """Validate parameters before running analysis. Returns list of error messages."""
+        errors = []
+        params = self._collect_params()
+        if params.get('crop_n', 0) <= params.get('crop_0', 0):
+            errors.append("crop_n must be greater than crop_0")
+        if params.get('blank_n', 0) < params.get('blank_0', 0):
+            errors.append("blank_n must be >= blank_0")
+        d = params.get('diameter', 7)
+        if isinstance(d, (int, float)) and d % 2 == 0:
+            errors.append(f"Diameter ({d}) must be odd — will auto-correct to {d+1}")
+        ecc_lo = params.get('ecc_low', 0)
+        ecc_hi = params.get('ecc_high', 1)
+        if ecc_lo >= ecc_hi:
+            errors.append(f"ecc_low ({ecc_lo}) must be less than ecc_high ({ecc_hi})")
+        fr = params.get('frame_rate', 30)
+        if isinstance(fr, (int, float)) and fr <= 0:
+            errors.append("frame_rate must be positive")
+        return errors
+
     def _run_analysis(self):
         if self.controller.detector is None:
             messagebox.showinfo("FreeClimber", "Load a video first.")
             return
 
         if not self._analysis_lock.acquire(blocking=False):
+            return
+
+        validation_errors = self._validate_params()
+        if validation_errors:
+            self._analysis_lock.release()
+            messagebox.showwarning("Parameter Issues",
+                "Fix before running:\n\n" + "\n".join(f"• {e}" for e in validation_errors))
             return
 
         # Auto-save config before running
@@ -1758,7 +1856,7 @@ class FreeClimberApp(ctk.CTk):
 
         if isinstance(result, Exception):
             logger.exception("Analysis failed: %s", result)
-            messagebox.showerror("Error", f"Analysis failed:\n\n{result}")
+            self._toast(f"Analysis failed: {result}", level="error")
             self.status_var.set("Analysis failed")
             self.progress_label.configure(text="Failed")
             return
@@ -1773,7 +1871,7 @@ class FreeClimberApp(ctk.CTk):
 
         self.progress_label.configure(text="Complete")
         self.status_var.set("Analysis complete \u2014 results saved")
-        messagebox.showinfo("FreeClimber", "Analysis complete. Results saved to project folder.")
+        self._toast("Analysis complete — results saved", level="success")
 
     # ------------------------------------------------------------------
     # Populate Results tab
@@ -1783,46 +1881,59 @@ class FreeClimberApp(ctk.CTk):
         if df is None:
             return
 
-        # --- Summary card ---
-        summary_parts = []
-        if self.controller.video_path:
-            summary_parts.append(os.path.basename(self.controller.video_path))
-
+        # --- KPI cards ---
         quality = result.get('quality') if isinstance(result, dict) else None
+        pop = result.get('population_metrics') if isinstance(result, dict) else None
+        ci_data = result.get('climbing_index') if isinstance(result, dict) else None
+        per_fly = result.get('per_fly_metrics') if isinstance(result, dict) else None
+
+        # Mean Velocity
+        val_l, sub_l = self._kpi_cards["velocity"]
+        if pop and 'mean_speed' in pop:
+            val_l.configure(text=f"{pop['mean_speed']:.3f}")
+            sub_l.configure(text="px/frame" if not self.convert_cm_var.get() else "cm/s")
+        else:
+            val_l.configure(text="--")
+
+        # Flies Tracked
+        val_l, sub_l = self._kpi_cards["flies"]
+        fly_count = 0
+        if pop and 'fly_count_per_vial' in pop:
+            fly_count = int(sum(pop['fly_count_per_vial'].values()))
+        indiv = len(per_fly) if per_fly is not None and len(per_fly) > 0 else 0
+        val_l.configure(text=str(fly_count) if fly_count else str(indiv) if indiv else "--")
+        sub_l.configure(text=f"{indiv} individual" if indiv else "population avg")
+
+        # R-squared
+        val_l, sub_l = self._kpi_cards["r_squared"]
+        if 'r_value' in df.columns:
+            r_vals = df[~df.get('vial_ID', df.index).astype(str).str.endswith('_all')]['r_value']
+            mean_r = r_vals.abs().mean()
+            val_l.configure(text=f"{mean_r:.3f}")
+            color = C["success"] if mean_r > 0.9 else C["warning"] if mean_r > 0.7 else C["danger"]
+            val_l.configure(text_color=color)
+            sub_l.configure(text="mean |r|")
+        else:
+            val_l.configure(text="--")
+
+        # Quality
+        val_l, sub_l = self._kpi_cards["quality"]
         if quality:
             score = quality.get('overall_score', 0)
-            dots = self._quality_dots(score)
-            level = quality.get('overall_level', '?')
-            summary_parts.append(f"Quality: {dots} {level.title()} ({score:.2f})")
-
-        vial_col = next((c for c in df.columns if 'vial' in c.lower()), None)
-        if vial_col:
-            n_vials = len(df[~df[vial_col].astype(str).str.endswith('_all')])
+            level = quality.get('overall_level', '?').title()
+            val_l.configure(text=f"{self._quality_dots(score)} {level}")
+            sub_l.configure(text=f"score: {score:.2f}")
         else:
-            n_vials = len(df)
-        summary_parts.append(f"Vials: {n_vials}")
+            val_l.configure(text="--")
 
-        pop = result.get('population_metrics') if isinstance(result, dict) else None
-        if pop:
-            if 'mean_speed' in pop:
-                summary_parts.append(f"Mean speed: {pop['mean_speed']:.3f}")
-            if 'fly_count_per_vial' in pop:
-                total_flies = sum(pop['fly_count_per_vial'].values())
-                summary_parts.append(f"Flies tracked: ~{total_flies:.0f}")
-
-        has_tracking = result.get('has_individual_tracking', False) if isinstance(result, dict) else False
-        summary_parts.append(f"Tracking: {'ON' if has_tracking else 'OFF'}")
-
-        per_fly = result.get('per_fly_metrics') if isinstance(result, dict) else None
-        if per_fly is not None and len(per_fly) > 0:
-            summary_parts.append(f"Individual flies: {len(per_fly)}")
-
-        ci_data = result.get('climbing_index') if isinstance(result, dict) else None
+        # Climbing Index
+        val_l, sub_l = self._kpi_cards["climbing_idx"]
         if ci_data:
             mean_ci = np.mean(list(ci_data.values()))
-            summary_parts.append(f"Climbing idx: {mean_ci:.1f}%")
-
-        self.summary_label.configure(text="  |  ".join(summary_parts), text_color=C["text"])
+            val_l.configure(text=f"{mean_ci:.1f}%")
+            sub_l.configure(text=f"{len(ci_data)} vials")
+        else:
+            val_l.configure(text="--")
 
         # --- Slopes table with quality dots ---
         self.slopes_tree.delete(*self.slopes_tree.get_children())
@@ -2591,11 +2702,11 @@ class FreeClimberApp(ctk.CTk):
             if path:
                 try:
                     self.controller.export_results(fmt, path)
-                    messagebox.showinfo("Exported", f"Results saved to:\n{path}", parent=win)
                     win.destroy()
+                    self._toast(f"Exported: {os.path.basename(path)}", level="success")
                 except Exception as e:
                     logger.exception("Export failed")
-                    messagebox.showerror("Error", f"Export failed:\n\n{e}", parent=win)
+                    self._toast(f"Export failed: {e}", level="error")
 
         ctk.CTkButton(
             win, text="Export", command=do_export,
@@ -2609,7 +2720,7 @@ class FreeClimberApp(ctk.CTk):
     # ------------------------------------------------------------------
     def _show_about(self):
         messagebox.showinfo("About FreeClimber",
-                            "FreeClimber v3.1\n\n"
+                            "FreeClimber v4.0\n\n"
                             "Drosophila RING Assay Analysis\n"
                             "Climbing velocity from video\n\n"
                             "Based on Spierer et al. (2021) J Exp Biol\n"
@@ -2642,6 +2753,8 @@ class FreeClimberApp(ctk.CTk):
     def _delete_profile(self):
         name = self.profile_var.get()
         if name and name != "(none)":
+            if not messagebox.askyesno("Delete Profile", f"Delete profile '{name}'?"):
+                return
             self.controller.delete_profile(name)
             self._refresh_profiles()
             self.status_var.set(f"Profile deleted: {name}")

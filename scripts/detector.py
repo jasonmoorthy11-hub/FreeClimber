@@ -778,9 +778,11 @@ class detector:
         if len(peaks) == 0:
             threshold = np.median(x_array)
         else:
-            prominences = peak_prominences(counts, peaks)
-            most_prominent = find_peaks(counts, prominence=np.max(prominences))[0][0]
-            threshold = edges[most_prominent]
+            prom_values = peak_prominences(counts, peaks)[0]
+            most_prominent_peaks = find_peaks(counts, prominence=np.max(prom_values))[0]
+            if len(most_prominent_peaks) == 0:
+                most_prominent_peaks = peaks
+            threshold = edges[most_prominent_peaks[0]]
         if self.debug:
             print('                   Threshold =',threshold)
         return threshold
