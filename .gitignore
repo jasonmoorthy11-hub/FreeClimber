@@ -40,3 +40,6 @@ Data/
 
 # PyInstaller
 *.spec.bak
+
+# Claude Code
+.claude/
