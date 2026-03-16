@@ -424,7 +424,7 @@ class FreeClimberApp(ctk.CTk):
         self._roi_press = False
         self._roi_x0 = self._roi_y0 = 0
         self._roi_x1 = self._roi_y1 = 0
-        self.recent_files: list[str] = []
+        self.recent_files = []
         self._log_visible = False
         self._analysis_lock = threading.Lock()
 
@@ -443,7 +443,7 @@ class FreeClimberApp(ctk.CTk):
         )
         self.status_bar.pack(side="bottom", fill="x", padx=S["md"], pady=(S["xs"], S["xs"]))
 
-        self._toast_stack: list[ctk.CTkFrame] = []
+        self._toast_stack = []
 
     # ------------------------------------------------------------------
     # Toast notifications
@@ -1647,7 +1647,7 @@ class FreeClimberApp(ctk.CTk):
     # ------------------------------------------------------------------
     # Full analysis (threaded pipeline, main-thread plotting)
     # ------------------------------------------------------------------
-    def _validate_params(self) -> list[str]:
+    def _validate_params(self) -> list:
         """Validate parameters before running analysis. Returns list of error messages."""
         errors = []
         params = self._collect_params()
