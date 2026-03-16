@@ -159,7 +159,7 @@ def climbing_index(df: pd.DataFrame, threshold_height: float = None,
 
     for vial, vdf in frame_df.groupby('vial'):
         n_total = len(vdf)
-        n_above = len(vdf[vdf.y <= threshold_height])
+        n_above = len(vdf[vdf.y >= threshold_height])
         result[int(vial)] = round(n_above / n_total * 100, 1) if n_total > 0 else 0.0
 
     return result

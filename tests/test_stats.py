@@ -1,13 +1,8 @@
 """Tests for analysis/stats.py — statistical testing."""
 
-import os
-import sys
 
 import numpy as np
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
-
 from analysis.stats import (
     check_normality,
     cohens_d,

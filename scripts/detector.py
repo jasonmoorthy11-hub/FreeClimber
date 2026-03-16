@@ -5,8 +5,7 @@
 ## Date      : December 2020
 ## Purpose   : Script contains main functions used in FreeClimber package, as well as added functionality
 
-version = '3.1.0'
-publication = False
+version = '4.0.0'
 
 import logging
 import os
@@ -58,6 +57,7 @@ class detector:
 
         self.config_file = config_file
         self.video_file = self.check_video(video_file)
+        self.frame_range = (0, 0)
 
         ## Load variables
         if gui:
@@ -93,6 +93,7 @@ class detector:
             print('detector.load_for_gui')
         self.config = None
         self.path_project = None
+        self._llr_cache = {}
 
         ## Exit program if no variables are passed
         if variables is None:
@@ -173,7 +174,7 @@ class detector:
 
         ## Set file and path names
         folder,name = os.path.split(video_file)
-        self.name = name[:-5]
+        self.name = os.path.splitext(name)[0]
         self.name_nosuffix = '.'.join(video_file.split('.')[:-1])
 
         ## Defining final file names and destinations
@@ -215,7 +216,7 @@ class detector:
             self.vials = 1
 
         ## Spot diameter must be odd number
-        if ~self.diameter%2:
+        if self.diameter % 2 == 0:
             print(f'!! Issue with diameter: was {self.diameter}, now {self.diameter+1}')
             self.diameter += 1
 
@@ -224,17 +225,10 @@ class detector:
             print(f'!! Issue with frame_rate: was {self.frame_rate}, now 1')
             self.frame_rate = 1
 
-        ## Background blank cannot be greater than the frame
-        if self.blank_0 < self.crop_0:
-            self.blank_0 = self.crop_0
-
-        if self.blank_n > self.crop_n:
-            self.blank_n = self.crop_n
-
         ## Window size vs. frames to test
         if (self.crop_n - self.crop_0) < self.window:
 #             print('!! Issue with window size (%s) being greater than frames (%s). Window size set to 80 percent of desired frames (%s)' %(self.window,self.crop_n - self.crop_0,(.8 * (self.crop_n - self.crop_0))))
-            self.window = (self.crop_n - self.crop_0) * 0.8
+            self.window = int((self.crop_n - self.crop_0) * 0.8)
 
         ## blank vs. crop frames
         if self.blank_0 < self.crop_0:
@@ -283,6 +277,12 @@ class detector:
         if detected_fps > 0 and hasattr(self, 'frame_rate'):
             if abs(detected_fps - self.frame_rate) > 1:
                 print(f'!! Warning: Video fps ({detected_fps:.1f}) differs from config frame_rate ({self.frame_rate})')
+
+        ## Estimate memory and warn for large videos
+        est_bytes = self.n_frames * self.height * self.width * 3
+        est_gb = est_bytes / (1024 ** 3)
+        if est_gb > 2.0:
+            print(f'!! Warning: Video will use ~{est_gb:.1f} GB of RAM')
 
         ## Read all frames into array
         frames = []
@@ -337,9 +337,9 @@ class detector:
         if last_frame is None:
             last_frame = self.crop_n
         if y_max is None:
-            y_max = video_array.shape[2]
+            y_max = video_array.shape[1]
         if x_max is None:
-            x_max = video_array.shape[1]
+            x_max = video_array.shape[2]
         if self.debug:
             print(f'detector.crop_and_grayscale: Cropping from frame {first_frame} to {last_frame}')
 
@@ -605,7 +605,8 @@ class detector:
         n, bin_assignments, patches = plt.hist(spots[metric],bins = bins)
         bin_centers = 0.5 * (bin_assignments[:-1] + bin_assignments[1:])
         col = bin_centers - min(bin_centers)
-        col /= max(col)
+        if max(col) > 0:
+            col /= max(col)
 
         ## Plotting by color
         for c, p in zip(col, patches):
@@ -655,7 +656,6 @@ class detector:
             print('detector.spot_checker')
 
         ## Setting up figure parameters
-        int(str(len(metrics)) + str(2) + str(0))
         if image is None:
             image = self.clean_stack[0]
         count = 0
@@ -705,7 +705,7 @@ class detector:
             print('detector.find_spots')
         ## Check diameter
         diameter = int(diameter)
-        if ~diameter % 2:
+        if diameter % 2 == 0:
             diameter = diameter + 1
 
         ## Option to silence output
@@ -771,12 +771,16 @@ class detector:
             print('detector.find_threshold')
 
         ## Looking at the distribution of spot metrics as a histogram
-        x_array = np.histogram(x_array,bins = bins)[0]
+        counts, edges = np.histogram(x_array, bins=bins)
 
         ## Peak finding with SciPy.signal module
-        peaks = find_peaks(x_array)[0]
-        prominences = peak_prominences(x_array,peaks)
-        threshold = find_peaks(x_array, prominence=np.max(prominences))[0][0]
+        peaks = find_peaks(counts)[0]
+        if len(peaks) == 0:
+            threshold = np.median(x_array)
+        else:
+            prominences = peak_prominences(counts, peaks)
+            most_prominent = find_peaks(counts, prominence=np.max(prominences))[0][0]
+            threshold = edges[most_prominent]
         if self.debug:
             print('                   Threshold =',threshold)
         return threshold
@@ -792,8 +796,8 @@ class detector:
         if self.debug:
             print('detector.invert_y')
 
-        ## Inverts y-axis
-        inv_y = abs(spots.y - spots.y.max())
+        ## Inverts y-axis using ROI height
+        inv_y = abs(spots.y - self.h)
         return inv_y
 
     def get_slopes(self):
@@ -970,6 +974,14 @@ class detector:
         if self.debug:
             print('detector.local_linear_regression')
 
+        # Cache key based on data shape and window
+        if not hasattr(self, '_llr_cache'):
+            self._llr_cache = {}
+        cache_key = (len(df), df.frame.min() if len(df) > 0 else 0,
+                     df.frame.max() if len(df) > 0 else 0, self.window, method)
+        if cache_key in self._llr_cache:
+            return self._llr_cache[cache_key]
+
         ## Defining empty variables
         result_list, result = [],pd.DataFrame()
         llr_columns = ['first_frame','last_frame','slope','intercept','r','pval','err','quality']
@@ -1021,6 +1033,7 @@ class detector:
             result = result[result.err == result.err.min()]
         else:
             print("Unrecognized method, chose either 'max_r' to select the window with the greatest R or 'min_err' to select the window with the lowest error")
+        self._llr_cache[cache_key] = result
         return result
 
 
@@ -1247,18 +1260,6 @@ class detector:
         ## Assigning spots to vials, 0 if False AND outside of the True point range
         print('-- [ Step 4e ]   - Assigning spots to vials')
         self.bin_lines, self.df_big.loc[self.df_big['True_particle'],'vial'] = self.bin_vials(self.df_big[self.df_big.True_particle],vials = self.vials)
-
-        ########################################
-        ## Beginning of publication insert
-        if publication:
-            df=self.df_big
-            self.bin_lines = self.bin_vials(df[df.y > 120], vials= self.vials)[0]
-            df['vial'] = np.repeat(0,df.shape[0])
-            vial_assignments = self.bin_vials(df, vials = self.vials, bin_lines = self.bin_lines)[1]
-            df.loc[(df.x >= self.bin_lines[0]) & (df.x <= self.bin_lines[-1]),'vial'] = vial_assignments
-            self.df_big = df
-        ## End of publication insert
-        ########################################
 
         self.df_big.loc[~self.df_big['True_particle'],'vial'] = 0
 
@@ -1563,10 +1564,8 @@ class detector:
         ax.set_ylim(0,ax.get_ylim()[1])
         ax.set(title=title,xlabel = label_x,ylabel=label_y)
 
-        if ax is None:
-            return
-        else:
-            return ax
+        return ax
+
     def loclin_plot_x(self, ax=None):
         """
         Horizontal position plot: mean x-position vs. frame/time.

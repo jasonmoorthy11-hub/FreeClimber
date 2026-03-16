@@ -1,12 +1,7 @@
 """Tests for output/database.py — SQLite experiment database."""
 
-import os
-import sys
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
-
 from output.database import (
     init_db,
     query_experiments,

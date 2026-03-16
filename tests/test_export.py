@@ -1,14 +1,10 @@
 """Tests for output/export.py — data export formats."""
 
 import os
-import sys
 import tempfile
 
 import pandas as pd
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
-
 from output.export import (
     export_per_fly_tracks,
     export_prism_csv,

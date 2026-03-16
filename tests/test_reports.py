@@ -1,12 +1,8 @@
 """Tests for output/reports.py — report generation."""
 
 import os
-import sys
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
-
 from output.reports import generate_methods_paragraph
 
 
@@ -25,7 +21,7 @@ class TestMethodsParagraph:
 
     def test_contains_version(self, sample_config):
         text = generate_methods_paragraph(sample_config)
-        assert 'v3.1' in text
+        assert 'v4.0.0' in text
 
 
 class TestHTMLReport:

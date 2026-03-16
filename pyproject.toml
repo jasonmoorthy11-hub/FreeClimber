@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "FreeClimber"
-version = "3.1.0"
+version = "4.0.0"
 description = "Drosophila RING assay climbing velocity analysis — background subtraction, particle detection, and local linear regression."
 readme = "README.md"
 license = {text = "MIT"}
@@ -26,6 +26,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 
@@ -49,6 +50,7 @@ excel = ["openpyxl>=3.1"]
 all = ["jinja2>=3.1", "weasyprint>=60", "plotly>=5.18", "openpyxl>=3.1"]
 dev = [
     "pytest>=7.0",
+    "pytest-cov>=4.0",
     "ruff>=0.3",
 ]
 
@@ -63,6 +65,7 @@ include = ["scripts*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["scripts"]
 collect_ignore_glob = ["scripts/**"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",

@@ -7,7 +7,7 @@
 
 
 ## Version number
-version = '2.3.0'
+version = '4.0.0'
 doi =  'https://doi.org/10.1242/jeb.229377' ## Link to published paper
 
 ## Importing external package(s)

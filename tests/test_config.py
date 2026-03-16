@@ -1,13 +1,9 @@
 """Tests for config.py — safe parsing, validation, backward compatibility."""
 
 import os
-import sys
 import tempfile
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
-
 from config import (
     KNOWN_PARAMS,
     _parse_value,

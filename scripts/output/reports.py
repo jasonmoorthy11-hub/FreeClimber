@@ -12,6 +12,8 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
+from scripts import __version__
+
 logger = logging.getLogger(__name__)
 
 
@@ -305,7 +307,7 @@ def generate_methods_paragraph(params: dict) -> str:
     crop_n = params.get('crop_n', '?')
 
     text = (
-        f"Climbing velocity was measured using FreeClimber v3.1 (Spierer et al., 2021). "
+        f"Climbing velocity was measured using FreeClimber v{__version__} (Spierer et al., 2021). "
         f"Videos were recorded at {frame_rate} fps and analyzed from frame {crop_0} to {crop_n}. "
         f"Background subtraction was performed using the {bg} method. "
         f"Fly positions were detected using particle detection (diameter={diameter} px, "

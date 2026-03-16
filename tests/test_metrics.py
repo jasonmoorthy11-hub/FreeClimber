@@ -1,14 +1,9 @@
 """Tests for analysis/metrics.py — per-fly and population metrics."""
 
-import os
-import sys
 
 import numpy as np
 import pandas as pd
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
-
 from analysis.metrics import climbing_index, compute_per_fly_metrics, compute_population_metrics
 
 

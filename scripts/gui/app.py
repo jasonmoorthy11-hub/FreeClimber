@@ -1,4 +1,4 @@
-"""FreeClimber v3.1 — customtkinter GUI.
+"""FreeClimber v4.0 — customtkinter GUI.
 
 Professional desktop app replacing the legacy wxPython interface.
 Designed for non-technical lab members: sliders, tooltips, drag-and-drop,
@@ -45,15 +45,20 @@ from matplotlib.patches import Rectangle
 # Design tokens
 # ---------------------------------------------------------------------------
 C = {
-    "bg":           "#0f0f1a",
-    "bg_panel":     "#161625",
-    "bg_card":      "#1c1c30",
-    "bg_hover":     "#252540",
+    # 5-tier dark theme elevation system
+    "bg":           "#0a0a14",   # Level 0: Base (window background)
+    "bg_panel":     "#0f0f1a",   # Level 1: Surface (main content)
+    "bg_card":      "#161625",   # Level 2: Raised (cards, sidebar, panels)
+    "bg_hover":     "#1e1e30",   # Level 3: Overlay (dropdowns, tooltips, modals)
+    "bg_elevated":  "#28283d",   # Level 4: Elevated (hover states, active items)
     "bg_input":     "#12121f",
-    "border":       "#2a2a45",
-    "text":         "#e4e4ed",
-    "text_dim":     "#8585a0",
-    "text_disabled":"#44445a",
+    "border":       "#ffffff12",
+    "border_subtle":"#ffffff08",
+    # Text hierarchy
+    "text":         "#f0f0f5",   # Primary
+    "text_dim":     "#a0a0b8",   # Secondary
+    "text_disabled":"#6b6b85",   # Disabled
+    # Accents
     "accent":       "#53a8b6",
     "accent_hover": "#6bc4d0",
     "accent_muted": "#2a5a64",
@@ -66,39 +71,61 @@ C = {
     "text_on_accent": "#ffffff",
 }
 
-S = {"xs": 4, "sm": 8, "md": 16, "lg": 24, "xl": 32, "xxl": 48}
+S = {"xxs": 2, "xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 24, "xxl": 32, "xxxl": 48}
 
 FONT_FAMILY = "Helvetica"
+MONO_FAMILY = "SF Mono"
 
 F = {
-    "h1":      (FONT_FAMILY, 20, "bold"),
-    "h2":      (FONT_FAMILY, 15, "bold"),
-    "body":    (FONT_FAMILY, 13),
+    "h1":      (FONT_FAMILY, 24, "bold"),   # Page titles
+    "h2":      (FONT_FAMILY, 18, "bold"),   # Section headings
+    "h3":      (FONT_FAMILY, 15, "bold"),   # Subsection
+    "body":    (FONT_FAMILY, 13),           # Data-dense body
     "body_b":  (FONT_FAMILY, 13, "bold"),
-    "caption": (FONT_FAMILY, 11),
-    "mono":    ("Menlo", 11),
+    "caption": (FONT_FAMILY, 11),           # Labels
+    "mono":    (MONO_FAMILY, 12),           # Data/code
 }
 
-plt.rcParams.update({
-    'figure.facecolor': C["bg"],
+R = {"btn": 6, "card": 8, "modal": 12, "pill": 9999}
+
+PLOT_STYLE = {
+    'figure.facecolor': C["bg_panel"],
     'axes.facecolor':   C["bg_card"],
-    'axes.edgecolor':   C["border"],
-    'axes.labelcolor':  C["text"],
-    'text.color':       C["text"],
-    'xtick.color':      C["text_dim"],
-    'ytick.color':      C["text_dim"],
-    'grid.color':       C["border"],
+    'axes.edgecolor':   '#2a2a3e',
+    'axes.labelcolor':  '#E0E0E0',
+    'text.color':       '#E0E0E0',
+    'xtick.color':      '#8a8a9a',
+    'ytick.color':      '#8a8a9a',
+    'grid.color':       C["bg_hover"],
     'grid.alpha':       0.4,
     'axes.grid':        True,
     'grid.linestyle':   '--',
+    'axes.spines.top':  False,
+    'axes.spines.right': False,
     'axes.titlesize':   13,
     'axes.labelsize':   12,
     'xtick.labelsize':  10,
     'ytick.labelsize':  10,
     'legend.facecolor': C["bg_card"],
-    'legend.edgecolor': C["border"],
+    'legend.edgecolor': '#2a2a3e',
     'legend.fontsize':  10,
-})
+}
+plt.rcParams.update(PLOT_STYLE)
+
+EXPORT_STYLE = {
+    'figure.facecolor': '#ffffff',
+    'axes.facecolor':   '#ffffff',
+    'axes.edgecolor':   '#333333',
+    'axes.labelcolor':  '#000000',
+    'text.color':       '#000000',
+    'xtick.color':      '#333333',
+    'ytick.color':      '#333333',
+    'grid.color':       '#cccccc',
+    'axes.spines.top':  False,
+    'axes.spines.right': False,
+    'font.family':      'sans-serif',
+    'font.size':        7,
+}
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'theme.json'))
@@ -386,7 +413,7 @@ class FreeClimberApp(ctk.CTk):
 
     def __init__(self):
         super().__init__()
-        self.title("FreeClimber v3.0")
+        self.title("FreeClimber v4.0")
         self.geometry("1340x860")
         self.minsize(1060, 700)
         self.configure(fg_color=C["bg"])
@@ -399,6 +426,7 @@ class FreeClimberApp(ctk.CTk):
         self._roi_x1 = self._roi_y1 = 0
         self.recent_files: list[str] = []
         self._log_visible = False
+        self._analysis_lock = threading.Lock()
 
         self._build_menu_bar()
         self._build_layout()
@@ -450,6 +478,7 @@ class FreeClimberApp(ctk.CTk):
         self.bind("<Command-e>", lambda e: self._export_dialog())
         self.bind("<Command-Shift-S>", lambda e: self._save_current_figure())
         self.bind("<Command-l>", lambda e: self._load_results())
+        self.bind("<Escape>", lambda e: self._cancel_analysis())
 
     # ------------------------------------------------------------------
     # Layout
@@ -914,7 +943,6 @@ class FreeClimberApp(ctk.CTk):
         self._build_diagnostics_tab()
         self._build_results_tab()
         self._build_statistics_tab()
-        self._bind_all_context_menus()
 
     def _show_tabs(self):
         self.empty_state.grid_forget()
@@ -1189,11 +1217,6 @@ class FreeClimberApp(ctk.CTk):
             for canvas in items:
                 canvas.draw()
 
-    def _bind_all_context_menus(self):
-        # Context menus for lazy figures are bound in _ensure_fig
-        # Only bind setup/diagnostics here (eagerly created)
-        pass
-
     # ------------------------------------------------------------------
     # Treeview dark style
     # ------------------------------------------------------------------
@@ -1374,6 +1397,8 @@ class FreeClimberApp(ctk.CTk):
     def _roi_press_event(self, event):
         if event.inaxes is None:
             return
+        if event.xdata is None or event.ydata is None:
+            return
         self._roi_press = True
         self._roi_x0 = int(event.xdata)
         self._roi_y0 = int(event.ydata)
@@ -1437,13 +1462,23 @@ class FreeClimberApp(ctk.CTk):
         self.status_var.set(f"Loading: {os.path.basename(path)}...")
         self.update_idletasks()
 
-        try:
-            params = self._collect_params()
-            self.video_meta = self.controller.load_video(path, params)
-        except Exception as e:
-            messagebox.showerror("Error", f"Could not load video:\n\n{e}")
-            self.status_var.set("Error loading video")
-            return
+        def _load_worker():
+            try:
+                params = self._collect_params()
+                meta = self.controller.load_video(path, params)
+                self.after(0, lambda: self._on_video_loaded(path, meta))
+            except Exception as e:
+                logger.exception("Failed to load video")
+                self.after(0, lambda ex=e: self._on_video_load_error(ex))
+
+        threading.Thread(target=_load_worker, daemon=True).start()
+
+    def _on_video_load_error(self, e):
+        messagebox.showerror("Error", f"Could not load video:\n\n{e}")
+        self.status_var.set("Error loading video")
+
+    def _on_video_loaded(self, path: str, meta: dict):
+        self.video_meta = meta
 
         # Switch from empty state to tabs
         self._show_tabs()
@@ -1521,6 +1556,7 @@ class FreeClimberApp(ctk.CTk):
         try:
             result = self.controller.test_parameters(params, axes)
         except Exception as e:
+            logger.exception("Parameter testing failed")
             messagebox.showerror("Error", f"Parameter testing failed:\n\n{e}")
             self.status_var.set("Error during testing")
             return
@@ -1545,16 +1581,24 @@ class FreeClimberApp(ctk.CTk):
             messagebox.showinfo("FreeClimber", "Load a video first.")
             return
 
+        if not self._analysis_lock.acquire(blocking=False):
+            return
+
         # Auto-save config before running
         if self.controller.video_path:
             try:
                 cfg_path = self.controller.video_path.rsplit('.', 1)[0] + '.cfg'
                 self.controller.save_config(cfg_path, self._collect_params())
             except Exception:
-                pass
+                logger.exception("Failed to auto-save config")
 
+        self.controller._cancel.clear()
         self.status_var.set("Running analysis...")
-        self.run_btn.configure(state="disabled", text="Running...")
+        self.run_btn.configure(
+            state="normal", text="CANCEL",
+            fg_color=C["danger"], hover_color="#ff3050",
+            command=self._cancel_analysis,
+        )
         self.progress_bar.set(0)
         self.progress_label.configure(text="Processing...")
         self.update_idletasks()
@@ -1569,9 +1613,15 @@ class FreeClimberApp(ctk.CTk):
                 result = self.controller.run_pipeline_only(params, progress_callback=progress)
                 self.after(0, lambda r=result: self._on_analysis_done(r))
             except Exception as e:
+                logger.exception("Analysis worker failed")
                 self.after(0, lambda ex=e: self._on_analysis_done(ex))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _cancel_analysis(self):
+        self.controller._cancel.set()
+        self.status_var.set("Cancelling...")
+        self.run_btn.configure(state="disabled", text="Cancelling...")
 
     def _analysis_progress(self, step, total, msg):
         self.progress_bar.set(step / max(total, 1))
@@ -1580,6 +1630,12 @@ class FreeClimberApp(ctk.CTk):
 
     def _draw_diagnostics(self):
         """Draw diagnostic subplots using data stored on the detector object."""
+        try:
+            self._draw_diagnostics_inner()
+        except Exception:
+            logger.exception("Failed to draw diagnostics")
+
+    def _draw_diagnostics_inner(self):
         import matplotlib.cm as cm
         from matplotlib.lines import Line2D
 
@@ -1661,7 +1717,8 @@ class FreeClimberApp(ctk.CTk):
             axes[4].set_title('Signal Distribution')
             axes[4].hist(det.df_big.signal, bins=bins)
             y_max = np.histogram(det.df_big.signal, bins=bins)[0].max()
-            axes[4].vlines(det.threshold, 0, y_max)
+            if isinstance(det.threshold, (int, float)):
+                axes[4].vlines(det.threshold, 0, y_max)
 
         # Subplot 5: Flies detected per frame
         if hasattr(det, 'df_filtered') and det.df_filtered is not None:
@@ -1688,10 +1745,19 @@ class FreeClimberApp(ctk.CTk):
         self.diag_canvas.draw()
 
     def _on_analysis_done(self, result):
-        self.run_btn.configure(state="normal", text="RUN ANALYSIS")
+        try:
+            self._analysis_lock.release()
+        except RuntimeError:
+            pass
+        self.run_btn.configure(
+            state="normal", text="RUN ANALYSIS",
+            fg_color=C["run"], hover_color="#66BB6A",
+            command=self._run_analysis,
+        )
         self.progress_bar.set(1.0)
 
         if isinstance(result, Exception):
+            logger.exception("Analysis failed: %s", result)
             messagebox.showerror("Error", f"Analysis failed:\n\n{result}")
             self.status_var.set("Analysis failed")
             self.progress_label.configure(text="Failed")
@@ -2198,6 +2264,29 @@ class FreeClimberApp(ctk.CTk):
             self._set_stats_text("No slope/velocity column found in results.")
             return
 
+        # Apply normalization if selected
+        norm_choice = getattr(self, 'stats_norm_var', None)
+        norm_choice = norm_choice.get() if norm_choice else "None"
+        if norm_choice == "% of Control" and 'vial_ID' in df.columns:
+            try:
+                from analysis.normalization import normalize_to_control
+                control_vials = [df['vial_ID'].iloc[0]]
+                df = normalize_to_control(df, control_vials, metric_col=slope_col)
+                norm_col = f'normalized_{slope_col}'
+                if norm_col in df.columns:
+                    slope_col = norm_col
+            except Exception as e:
+                logger.warning("Normalization to control failed: %s", e)
+        elif norm_choice == "Z-score":
+            try:
+                from analysis.normalization import batch_zscore
+                df = batch_zscore(df, metric_col=slope_col)
+                zscore_col = f'zscore_{slope_col}'
+                if zscore_col in df.columns:
+                    slope_col = zscore_col
+            except Exception as e:
+                logger.warning("Z-score normalization failed: %s", e)
+
         group_col = None
         for c in df.columns:
             if any(kw in c.lower() for kw in ['geno', 'genotype', 'group', 'condition', 'treatment']):
@@ -2260,6 +2349,20 @@ class FreeClimberApp(ctk.CTk):
         # --- Formatted text ---
         lines = ["\u2550" * 50, "  STATISTICAL ANALYSIS", "\u2550" * 50, ""]
 
+        # Read dropdown selections
+        test_choice = getattr(self, 'stats_test_var', None)
+        test_choice = test_choice.get() if test_choice else "Auto-detect"
+        correction_choice = getattr(self, 'stats_correction_var', None)
+        correction_choice = correction_choice.get() if correction_choice else "Holm-Bonferroni"
+
+        correction_map = {
+            "Holm-Bonferroni": "holm",
+            "Benjamini-Hochberg": "bh",
+            "Bonferroni": "holm",
+            "None": None,
+        }
+        correction_method = correction_map.get(correction_choice, "holm")
+
         if group_col and df[group_col].nunique() >= 2 and len(groups) >= 2:
             norm = check_normality(groups)
             lines.append("\u25b6 NORMALITY (Shapiro-Wilk)")
@@ -2270,9 +2373,16 @@ class FreeClimberApp(ctk.CTk):
             lines.append(f"  All normal: {'Yes' if norm['all_normal'] else 'No'}")
             lines.append("")
 
-            if len(groups) == 2:
+            # Determine forced normality from test choice
+            force_normal = None
+            if test_choice in ("ANOVA",):
+                force_normal = True
+            elif test_choice in ("Kruskal-Wallis",):
+                force_normal = False
+
+            if test_choice == "Two-group" or (test_choice == "Auto-detect" and len(groups) == 2):
                 keys = list(groups.keys())
-                stat_result = compare_two_groups(groups[keys[0]], groups[keys[1]])
+                stat_result = compare_two_groups(groups[keys[0]], groups[keys[1]], normal=force_normal)
                 lines.append("\u25b6 TWO-GROUP COMPARISON")
                 lines.append("\u2500" * 40)
                 lines.append(f"  Test: {stat_result['test']}")
@@ -2281,8 +2391,20 @@ class FreeClimberApp(ctk.CTk):
                 lines.append(f"  p-value: {stat_result['p_value']:.6f}  {sig}")
                 lines.append(f"  Cohen's d: {stat_result['effect_size_d']:.3f}")
                 lines.append("")
-            elif len(groups) >= 3:
-                stat_result = compare_multiple_groups(groups)
+            elif test_choice == "Dunnett's" and len(groups) >= 2:
+                from analysis.stats import dunnett_vs_control
+                control = list(groups.keys())[0]
+                comparisons = dunnett_vs_control(groups, control)
+                lines.append(f"\u25b6 DUNNETT'S TEST (control: {control})")
+                lines.append("\u2500" * 40)
+                for comp in comparisons:
+                    lines.append(
+                        f"  {comp['group']}: p={comp['p_value']:.6f} {comp['significance']} "
+                        f"(d={comp['effect_size_d']:.3f})"
+                    )
+                lines.append("")
+            elif len(groups) >= 3 or test_choice in ("Pairwise", "ANOVA", "Kruskal-Wallis"):
+                stat_result = compare_multiple_groups(groups, normal=force_normal)
                 lines.append(f"\u25b6 MULTI-GROUP COMPARISON ({len(groups)} groups)")
                 lines.append("\u2500" * 40)
                 lines.append(f"  Test: {stat_result['test']}")
@@ -2293,13 +2415,21 @@ class FreeClimberApp(ctk.CTk):
                 lines.append("")
 
                 if stat_result.get('post_hoc'):
-                    lines.append(f"\u25b6 POST-HOC: {stat_result['post_hoc_method']}")
+                    post_hoc = stat_result['post_hoc']
+                    if correction_method and len(post_hoc) > 1:
+                        from analysis.stats import correct_pvalues
+                        raw_ps = [c['p_value'] for c in post_hoc]
+                        adj_ps = correct_pvalues(raw_ps, method=correction_method)
+                        for c, ap in zip(post_hoc, adj_ps):
+                            c['p_value'] = ap
+                            c['significance'] = '***' if ap < 0.001 else '**' if ap < 0.01 else '*' if ap < 0.05 else 'ns'
+                    correction_label = f" ({correction_choice})" if correction_method else ""
+                    lines.append(f"\u25b6 POST-HOC: {stat_result['post_hoc_method']}{correction_label}")
                     lines.append("\u2500" * 40)
-                    # Aligned table
                     lines.append(f"  {'Group 1':<12} {'Group 2':<12} {'p-value':<10} {'Sig':<5} {'d':<8}")
                     sep = "\u2500"
                     lines.append(f"  {sep*12} {sep*12} {sep*10} {sep*5} {sep*8}")
-                    for comp in stat_result['post_hoc']:
+                    for comp in post_hoc:
                         lines.append(
                             f"  {comp['group1']:<12} {comp['group2']:<12} "
                             f"{comp['p_value']:<10.6f} {comp['significance']:<5} "
@@ -2373,6 +2503,7 @@ class FreeClimberApp(ctk.CTk):
                 self._apply_params_to_gui(params)
                 self.status_var.set(f"Config loaded: {os.path.basename(path)}")
             except Exception as e:
+                logger.exception("Config load failed")
                 messagebox.showerror("Error", f"Could not load config:\n\n{e}")
 
     # ------------------------------------------------------------------
@@ -2463,6 +2594,7 @@ class FreeClimberApp(ctk.CTk):
                     messagebox.showinfo("Exported", f"Results saved to:\n{path}", parent=win)
                     win.destroy()
                 except Exception as e:
+                    logger.exception("Export failed")
                     messagebox.showerror("Error", f"Export failed:\n\n{e}", parent=win)
 
         ctk.CTkButton(
@@ -2495,6 +2627,7 @@ class FreeClimberApp(ctk.CTk):
             self._apply_params_to_gui(params)
             self.status_var.set(f"Profile loaded: {name}")
         except Exception as e:
+            logger.exception("Profile load failed")
             messagebox.showerror("Error", f"Could not load profile:\n\n{e}")
 
     def _save_profile(self):

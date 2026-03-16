@@ -1,15 +1,11 @@
 """Tests for output/figures.py — figure generation."""
 
 import os
-import sys
 
+import matplotlib
 import numpy as np
 import pandas as pd
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
-
-import matplotlib
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt

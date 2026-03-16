@@ -46,16 +46,13 @@ class AnalysisController:
 
         Returns dict with keys: n_frames, width, height, fps, first_frame, last_frame
         """
-        import cv2
         from detector import detector
 
         self.video_path = path
         variables = self._params_to_variables(params or self.config)
         self.detector = detector(path, gui=True, variables=variables)
 
-        cap = cv2.VideoCapture(path)
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        cap.release()
+        fps = getattr(self.detector, 'frame_rate', 30)
 
         first = self.detector.image_stack[0] if len(self.detector.image_stack) > 0 else None
         last = self.detector.image_stack[-1] if len(self.detector.image_stack) > 1 else None
@@ -126,6 +123,9 @@ class AnalysisController:
         # --- Post-analysis: wire up quality, metrics, per-fly ---
         self._compute_post_analysis(params, result)
 
+        # --- Auto-save to database ---
+        self._save_to_database(params, result)
+
         return result
 
     def _compute_post_analysis(self, params: dict, result: dict):
@@ -192,6 +192,40 @@ class AnalysisController:
                     result['climbing_index'] = self.climbing_index
             except Exception as e:
                 logger.warning("Climbing index failed: %s", e)
+
+    def _save_to_database(self, params: dict, result: dict):
+        """Auto-save analysis results to SQLite database."""
+        try:
+            from output.database import (
+                init_db,
+                save_experiment,
+                save_fly_tracks,
+                save_slopes,
+                save_video,
+            )
+            conn = init_db()
+            exp_name = getattr(self.detector, 'name', 'unnamed')
+            exp_id = save_experiment(conn, exp_name,
+                                     config=params,
+                                     notes="Auto-saved from GUI analysis")
+            quality = self.quality_scores or {}
+            vid_id = save_video(conn, exp_id,
+                                video_path=self.video_path or '',
+                                n_frames=getattr(self.detector, 'n_frames', 0),
+                                fps=getattr(self.detector, 'frame_rate', 0),
+                                width=getattr(self.detector, 'width', 0),
+                                height=getattr(self.detector, 'height', 0),
+                                quality_score=quality.get('overall_score', None),
+                                quality_level=quality.get('overall_level', None))
+            if self.slopes_df is not None:
+                save_slopes(conn, vid_id, self.slopes_df)
+            if self.positions_df is not None and 'particle' in self.positions_df.columns:
+                save_fly_tracks(conn, vid_id, self.positions_df)
+            conn.commit()
+            conn.close()
+            logger.info("Results saved to database (experiment=%s, video=%s)", exp_id, vid_id)
+        except Exception as e:
+            logger.warning("Database save failed: %s", e)
 
     # ------------------------------------------------------------------
     # Pipeline-only (no plotting) for threaded analysis
