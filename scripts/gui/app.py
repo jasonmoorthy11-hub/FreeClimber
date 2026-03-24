@@ -146,7 +146,7 @@ TOOLTIPS = {
     'threshold': "Brightness threshold for spot detection. 'auto' uses Otsu's method. Or enter a number.",
     'ecc_low': "Minimum eccentricity (0 = perfect circle). Rejects too-round artifacts.",
     'ecc_high': "Maximum eccentricity (1 = very elongated). Rejects non-circular objects.",
-    'vials': "Number of vials visible in the video. FreeClimber divides the ROI into this many vertical strips.",
+    'vials': "Number of vials visible in the video (0 = auto-detect from spot positions).",
     'window': "Number of frames for the local linear regression window. ~2 seconds of video is typical.",
     'pixel_to_cm': "Pixels per centimeter. Use the calibration wizard or measure manually.",
     'frame_rate': "Video frame rate (fps). Auto-detected from video if possible.",
@@ -552,6 +552,18 @@ class FreeClimberApp(ctk.CTk):
         self.bind("<Command-p>", lambda e: self._publication_export())
         self.bind("<Command-k>", lambda e: self._show_command_palette())
 
+    def _fix_scroll(self, scrollable_frame):
+        """Enable two-finger / trackpad scrolling on macOS for CTkScrollableFrame."""
+        canvas = scrollable_frame._parent_canvas
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * event.delta), "units")
+        def _bind_wheel(event):
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        def _unbind_wheel(event):
+            canvas.unbind_all("<MouseWheel>")
+        canvas.bind("<Enter>", _bind_wheel)
+        canvas.bind("<Leave>", _unbind_wheel)
+
     # ------------------------------------------------------------------
     # Persistence: Recent files + Window state
     # ------------------------------------------------------------------
@@ -752,6 +764,7 @@ class FreeClimberApp(ctk.CTk):
         self.sidebar = sidebar
         sidebar._parent_canvas.configure(yscrollincrement=8)
         sidebar.after(200, lambda: sidebar._parent_canvas.yview_moveto(0))
+        self._fix_scroll(sidebar)
 
         # ============================================================
         # STEP 1: LOAD VIDEO (always active)
@@ -858,11 +871,17 @@ class FreeClimberApp(ctk.CTk):
         self.step4_card.pack(fill="x", padx=S["sm"], pady=(0, S["sm"]))
         self.step4_card.set_enabled(False)
 
-        # Vials + Groups
+        # Vials + Groups (0 = auto-detect)
         vial_frame = ctk.CTkFrame(self.step4_card.body, fg_color="transparent")
         vial_frame.pack(fill="x", pady=S["xs"])
-        self.sl_vials = ParameterSlider(vial_frame, "Vials", 1, 20, 3, int, TOOLTIPS['vials'])
+        self.sl_vials = ParameterSlider(vial_frame, "Vials", 0, 20, 3, int, TOOLTIPS['vials'])
         self.sl_vials.pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(
+            vial_frame, text="Auto", width=50,
+            fg_color=C["bg_hover"], hover_color=C["accent_muted"],
+            text_color=C["accent"], corner_radius=6,
+            font=(FONT_FAMILY, 11), command=lambda: self.sl_vials.set(0),
+        ).pack(side="right", padx=(S["xs"], 0))
         ctk.CTkButton(
             vial_frame, text="Groups", width=60,
             fg_color=C["bg_hover"], hover_color=C["accent_muted"],
@@ -899,19 +918,14 @@ class FreeClimberApp(ctk.CTk):
         self.sl_crop_n.pack(fill="x", pady=S["xs"])
 
         # RUN button — green (semantic: go/execute)
-        run_wrapper = ctk.CTkFrame(self.step4_card.body, fg_color=C["run"], corner_radius=10)
-        run_wrapper.pack(fill="x", pady=(S["sm"], S["xs"]))
-        ctk.CTkFrame(
-            run_wrapper, height=2, fg_color=C["run_hover"], corner_radius=0,
-        ).pack(fill="x")
         self.run_btn = ctk.CTkButton(
-            run_wrapper, text="RUN ANALYSIS", height=44,
+            self.step4_card.body, text="RUN ANALYSIS", height=44,
             font=F["h2"],
             fg_color=C["run"], hover_color=C["run_hover"],
-            text_color=C["text_on_accent"], corner_radius=8,
+            text_color=C["text_on_accent"], corner_radius=10,
             command=self._run_analysis,
         )
-        self.run_btn.pack(fill="x", padx=2, pady=(0, 2))
+        self.run_btn.pack(fill="x", pady=(S["sm"], S["xs"]))
 
         # Secondary action buttons
         btn_row = ctk.CTkFrame(self.step4_card.body, fg_color="transparent")
@@ -1745,9 +1759,11 @@ class FreeClimberApp(ctk.CTk):
         self.status_var.set(f"Loading: {os.path.basename(path)}...")
         self.update_idletasks()
 
+        # Collect params on main thread (tkinter widgets aren't thread-safe)
+        params = self._collect_params()
+
         def _load_worker():
             try:
-                params = self._collect_params()
                 meta = self.controller.load_video(path, params)
                 self.after(0, lambda: self._on_video_loaded(path, meta))
             except Exception as e:

@@ -210,10 +210,10 @@ class detector:
         if self.debug:
             print('detector.check_variable_formats')
 
-        ## Vial number
-        if self.vials < 1:
-            print('!! Issue with vials: now = 1')
-            self.vials = 1
+        ## Vial number (0 = auto-detect, handled in step_4)
+        if self.vials < 0:
+            print('!! Issue with vials: now = 0 (auto-detect)')
+            self.vials = 0
 
         ## Spot diameter must be odd number
         if self.diameter % 2 == 0:
@@ -748,7 +748,7 @@ class detector:
         df['y'] = df.y.round(2)
         df['t'] = [round(item/self.frame_rate,3) for item in df.frame]
         df['mass'] = df['mass'].astype(int)
-        df['size'] = df.size.round(3)
+        df['size'] = df['size'].round(3)
         df['ecc'] = df.ecc.round(3)
         df['signal'] = df.signal.round(2)
         df['raw_mass'] = df['mass'].astype(int)
@@ -922,6 +922,62 @@ class detector:
                     print('detector.get_trim_lines ::',edge,'@',crop,'(no crop)')
                 return crop
 
+    def auto_detect_vials(self, df, min_gap_ratio=0.3):
+        """Detect the number of vials from x-coordinate gaps in detected spots.
+
+        Finds large gaps in the x-position histogram that separate vial clusters.
+        Returns (n_vials, bin_edges) where bin_edges mark vial boundaries.
+        """
+        x_vals = df[df.True_particle].x.values if 'True_particle' in df.columns else df.x.values
+        if len(x_vals) < 10:
+            return 1, [x_vals.min(), x_vals.max()]
+
+        # Build histogram of x positions
+        n_bins = min(200, max(50, len(x_vals) // 20))
+        counts, edges = np.histogram(x_vals, bins=n_bins)
+
+        # Find gaps: bins with zero or very few spots
+        threshold = max(1, np.median(counts) * 0.05)
+        is_gap = counts <= threshold
+
+        # Find contiguous gap regions
+        gap_starts, gap_ends, gap_widths = [], [], []
+        in_gap = False
+        for i, g in enumerate(is_gap):
+            if g and not in_gap:
+                in_gap = True
+                gap_starts.append(i)
+            elif not g and in_gap:
+                in_gap = False
+                gap_ends.append(i)
+                gap_widths.append(edges[i] - edges[gap_starts[-1]])
+        if in_gap:
+            gap_ends.append(len(counts))
+            gap_widths.append(edges[len(counts)] - edges[gap_starts[-1]])
+
+        if not gap_widths:
+            return 1, [x_vals.min(), x_vals.max()]
+
+        # Filter: only keep gaps that are at least min_gap_ratio of median vial width
+        x_range = x_vals.max() - x_vals.min()
+        min_gap = x_range * min_gap_ratio / max(len(gap_widths) + 1, 2)
+        significant_gaps = [(s, e, w) for s, e, w in zip(gap_starts, gap_ends, gap_widths)
+                           if w >= min_gap]
+
+        if not significant_gaps:
+            return 1, [x_vals.min(), x_vals.max()]
+
+        # Build bin edges from gap midpoints
+        bin_edges = [x_vals.min()]
+        for s, e, w in significant_gaps:
+            mid = (edges[s] + edges[e]) / 2
+            bin_edges.append(mid)
+        bin_edges.append(x_vals.max())
+
+        n_vials = len(bin_edges) - 1
+        print(f'                   Auto-detected {n_vials} vials')
+        return n_vials, np.array(bin_edges)
+
     def bin_vials(self, df, vials, percentage=1,top=False, bin_lines=None):
         '''Bin spots into vials. Function takes into account all points along the x-axis,
           and divides them into specified number of bins based on the min and max
@@ -951,8 +1007,8 @@ class detector:
 
             ## Assign spots to vials
             _labels = range(1,vials+1)
-            spot_assignments = pd.cut(df.x, bins=bin_lines, labels=_labels)
-            spot_assignments = pd.Series(spot_assignments).astype('int')
+            spot_assignments = pd.cut(df.x, bins=bin_lines, labels=_labels, include_lowest=True)
+            spot_assignments = pd.Series(spot_assignments).fillna(0).astype('int')
 
             ## Checks to make sure all vials have at least one spot. Important if a middle vial is absent or vials binned incorrectly.
             counts = np.unique(spot_assignments, return_counts = True)
@@ -1261,7 +1317,12 @@ class detector:
 
         ## Assigning spots to vials, 0 if False AND outside of the True point range
         print('-- [ Step 4e ]   - Assigning spots to vials')
-        self.bin_lines, self.df_big.loc[self.df_big['True_particle'],'vial'] = self.bin_vials(self.df_big[self.df_big.True_particle],vials = self.vials)
+        # Auto-detect vials if set to 0 or 'auto'
+        if self.vials in (0, 'auto', '0'):
+            self.vials, auto_bins = self.auto_detect_vials(self.df_big)
+            self.bin_lines, self.df_big.loc[self.df_big['True_particle'],'vial'] = self.bin_vials(self.df_big[self.df_big.True_particle],vials = self.vials, bin_lines=list(auto_bins))
+        else:
+            self.bin_lines, self.df_big.loc[self.df_big['True_particle'],'vial'] = self.bin_vials(self.df_big[self.df_big.True_particle],vials = self.vials)
 
         self.df_big.loc[~self.df_big['True_particle'],'vial'] = 0
 
