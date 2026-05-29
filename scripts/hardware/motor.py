@@ -3,6 +3,14 @@
 Supports GPIO on Raspberry Pi (lgpio) with mock mode for development.
 Default pins: Physical 11 (GPIO17) = PUL, Physical 13 (GPIO27) = DIR
 
+Supports two wiring modes:
+  - "sink" (default): Common-anode. 5V → PUL+, GPIO → PUL-.
+    Inverted logic: GPIO LOW = pulse ON, HIGH = pulse OFF.
+    Pi sinks ~10mA from 5V — sufficient for 2HSS86 opto-input.
+  - "source": Common-cathode. GPIO → resistor → PUL+, GND → PUL-.
+    Normal logic: GPIO HIGH = pulse ON, LOW = pulse OFF.
+    Requires transistor circuit — GPIO alone can't source enough current.
+
 CRITICAL: Physical pin numbers != GPIO/BCM numbers!
 - Physical 11 = GPIO 17 (pulse)
 - Physical 13 = GPIO 27 (direction)
@@ -16,11 +24,9 @@ import time
 
 logger = logging.getLogger(__name__)
 
-# Default GPIO pins (BCM numbering)
 DEFAULT_PUL_PIN = 17  # Physical pin 11
 DEFAULT_DIR_PIN = 27  # Physical pin 13
 
-# DIP switch presets: microstep setting -> steps per revolution
 MICROSTEP_TABLE = {
     400: 400,
     800: 800,
@@ -34,19 +40,17 @@ MICROSTEP_TABLE = {
 
 
 class RINGMotor:
-    """Controls NEMA 34 stepper motor via 2HSS86 driver.
-
-    Uses lgpio on Pi, mock mode on non-Pi systems.
-    """
+    """Controls NEMA 34 stepper motor via 2HSS86 driver."""
 
     def __init__(self, pul_pin: int = DEFAULT_PUL_PIN, dir_pin: int = DEFAULT_DIR_PIN,
-                 steps_per_rev: int = 6400, mock: bool = None):
+                 steps_per_rev: int = 400, mock: bool = None,
+                 wiring_mode: str = "sink"):
         self.pul_pin = pul_pin
         self.dir_pin = dir_pin
         self.steps_per_rev = steps_per_rev
-        self.current_position = 0  # steps from home
+        self.current_position = 0
+        self.wiring_mode = wiring_mode  # "sink" (inverted) or "source" (normal)
 
-        # Auto-detect mock mode
         if mock is None:
             self.mock = not self._is_raspberry_pi()
         else:
@@ -72,32 +76,85 @@ class RINGMotor:
     def _init_gpio(self):
         try:
             import lgpio
+            self._lgpio = lgpio
             self._h = lgpio.gpiochip_open(0)
-            lgpio.gpio_claim_output(self._h, self.pul_pin)
-            lgpio.gpio_claim_output(self._h, self.dir_pin)
-            logger.info(f"GPIO initialized: PUL={self.pul_pin}, DIR={self.dir_pin}")
+
+            # Idle state depends on wiring mode:
+            # sink mode: idle HIGH (no current through opto)
+            # source mode: idle LOW (no current through opto)
+            idle = 1 if self.wiring_mode == "sink" else 0
+
+            lgpio.gpio_claim_output(self._h, self.pul_pin, idle, lgpio.SET_PULL_NONE)
+            lgpio.gpio_claim_output(self._h, self.dir_pin, idle, lgpio.SET_PULL_NONE)
+            logger.info(f"GPIO initialized: PUL={self.pul_pin}, DIR={self.dir_pin}, "
+                        f"mode={self.wiring_mode}, idle={'HIGH' if idle else 'LOW'}")
         except Exception as e:
             logger.error(f"GPIO init failed: {e}. Switching to mock mode.")
             self.mock = True
             self._h = None
 
-    def _pulse(self, delay: float = 0.0001):
-        """Send one step pulse."""
+    def _pulse(self, delay: float = 0.0005):
         if self.mock:
             return
-        import lgpio
-        lgpio.gpio_write(self._h, self.pul_pin, 1)
-        time.sleep(delay)
-        lgpio.gpio_write(self._h, self.pul_pin, 0)
-        time.sleep(delay)
+        if self.wiring_mode == "sink":
+            # Inverted: LOW = active (current flows 5V → opto → GPIO sink)
+            self._lgpio.gpio_write(self._h, self.pul_pin, 0)
+            time.sleep(delay)
+            self._lgpio.gpio_write(self._h, self.pul_pin, 1)
+            time.sleep(delay)
+        else:
+            # Normal: HIGH = active
+            self._lgpio.gpio_write(self._h, self.pul_pin, 1)
+            time.sleep(delay)
+            self._lgpio.gpio_write(self._h, self.pul_pin, 0)
+            time.sleep(delay)
 
     def _set_direction(self, clockwise: bool = True):
-        """Set rotation direction."""
         if self.mock:
             return
-        import lgpio
-        lgpio.gpio_write(self._h, self.dir_pin, 1 if clockwise else 0)
+        if self.wiring_mode == "sink":
+            # Inverted: LOW = active
+            self._lgpio.gpio_write(self._h, self.dir_pin, 0 if clockwise else 1)
+        else:
+            self._lgpio.gpio_write(self._h, self.dir_pin, 1 if clockwise else 0)
         time.sleep(0.001)
+
+    def diagnose(self) -> dict:
+        """Run startup diagnostic — returns dict of check results."""
+        results = {}
+        results['mock'] = self.mock
+        results['wiring_mode'] = self.wiring_mode
+        results['steps_per_rev'] = self.steps_per_rev
+
+        if self.mock:
+            results['gpio'] = 'skipped (mock mode)'
+            return results
+
+        try:
+            idle = 1 if self.wiring_mode == "sink" else 0
+            active = 0 if self.wiring_mode == "sink" else 1
+
+            # Toggle PUL pin and verify
+            self._lgpio.gpio_write(self._h, self.pul_pin, active)
+            time.sleep(0.01)
+            self._lgpio.gpio_write(self._h, self.pul_pin, idle)
+            results['pul_toggle'] = 'ok'
+
+            # Toggle DIR pin and verify
+            self._lgpio.gpio_write(self._h, self.dir_pin, active)
+            time.sleep(0.01)
+            self._lgpio.gpio_write(self._h, self.dir_pin, idle)
+            results['dir_toggle'] = 'ok'
+
+            # Send 10 test pulses (should be invisible at 400 steps/rev = 9°)
+            for _ in range(10):
+                self._pulse(0.001)
+            results['test_pulses'] = 'sent 10 pulses'
+            results['gpio'] = 'ok'
+        except Exception as e:
+            results['gpio'] = f'error: {e}'
+
+        return results
 
     def rotate(self, degrees: float, direction: str = 'cw', speed: float = None):
         """Rotate motor by specified degrees.
@@ -111,21 +168,18 @@ class RINGMotor:
         clockwise = direction.lower() == 'cw'
 
         if speed is None:
-            speed = 0.0002  # default moderate speed
+            speed = 0.0005
 
         logger.info(f"Rotating {degrees}deg {'CW' if clockwise else 'CCW'} ({steps} steps)")
 
         self._set_direction(clockwise)
 
-        # Speed ramping: accelerate for first 10%, decelerate for last 10%
         ramp_steps = max(steps // 10, 1)
 
         for i in range(steps):
             if i < ramp_steps:
-                # Accelerate
                 delay = speed * (3 - 2 * i / ramp_steps)
             elif i > steps - ramp_steps:
-                # Decelerate
                 remaining = steps - i
                 delay = speed * (3 - 2 * remaining / ramp_steps)
             else:
@@ -137,27 +191,21 @@ class RINGMotor:
         logger.info(f"Rotation complete. Position: {self.current_position} steps")
 
     def flip_180(self, speed: float = None):
-        """Rotate 180 degrees for vial inversion."""
         self.rotate(180, direction='cw', speed=speed)
 
     def tap_sequence(self, n_taps: int = 3, interval: float = 0.5):
-        """Standard RING tapping protocol.
-
-        Per JoVE protocol: rapid taps to dislodge flies to bottom.
-        """
+        """Standard RING tapping protocol."""
         logger.info(f"Tap sequence: {n_taps} taps, {interval}s interval")
 
         for i in range(n_taps):
-            # Quick tap: small rotation forward then back
-            self.rotate(5, direction='cw', speed=0.00005)
-            self.rotate(5, direction='ccw', speed=0.00005)
+            self.rotate(5, direction='cw', speed=0.00015)
+            self.rotate(5, direction='ccw', speed=0.00015)
             if i < n_taps - 1:
                 time.sleep(interval)
 
         logger.info("Tap sequence complete")
 
     def home(self):
-        """Return to home position (0 steps)."""
         if self.current_position == 0:
             return
         direction = 'ccw' if self.current_position > 0 else 'cw'
@@ -166,12 +214,36 @@ class RINGMotor:
         self.current_position = 0
 
     def cleanup(self):
-        """Release GPIO resources."""
         if not self.mock and self._h is not None:
             try:
-                import lgpio
-                lgpio.gpiochip_close(self._h)
+                # Return pins to idle state before closing
+                idle = 1 if self.wiring_mode == "sink" else 0
+                self._lgpio.gpio_write(self._h, self.pul_pin, idle)
+                self._lgpio.gpio_write(self._h, self.dir_pin, idle)
+                self._lgpio.gpiochip_close(self._h)
                 logger.info("GPIO cleaned up")
             except Exception:
                 pass
             self._h = None
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+    print("Motor self-test (sink mode, 400 steps/rev)")
+    motor = RINGMotor(wiring_mode="sink", steps_per_rev=400)
+
+    print("\nRunning diagnostics...")
+    diag = motor.diagnose()
+    for k, v in diag.items():
+        print(f"  {k}: {v}")
+
+    if not motor.mock:
+        print("\nRotating 90° CW...")
+        motor.rotate(90, 'cw')
+        time.sleep(1)
+        print("Rotating 90° CCW...")
+        motor.rotate(90, 'ccw')
+        print("\nDone. Motor should be back at start position.")
+
+    motor.cleanup()

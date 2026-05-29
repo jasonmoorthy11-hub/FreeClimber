@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FreeClimber — Breadboard Wiring Guide</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif;
+    background: #0a0a1a; color: #e0e0e0; line-height: 1.6; padding: 0 0 80px 0;
+  }
+  header {
+    background: linear-gradient(135deg, #0f1629 0%, #1a1a3e 100%);
+    border-bottom: 2px solid #53a8b6; padding: 32px 24px; text-align: center;
+  }
+  header h1 { font-size: 28px; color: #53a8b6; margin-bottom: 4px; }
+  header p { color: #888; font-size: 14px; }
+  .container { max-width: 760px; margin: 0 auto; padding: 0 20px; }
+  .progress-bar {
+    position: sticky; top: 0; z-index: 100;
+    background: #0f0f1a; border-bottom: 1px solid #222; padding: 12px 24px;
+  }
+  .progress-track { height: 8px; background: #1a1a2e; border-radius: 4px; overflow: hidden; }
+  .progress-fill {
+    height: 100%; width: 0%; background: linear-gradient(90deg, #53a8b6, #4CAF50);
+    border-radius: 4px; transition: width 0.4s ease;
+  }
+  .progress-text { font-size: 12px; color: #888; margin-top: 4px; text-align: center; }
+  .section {
+    background: #12122a; border: 1px solid #1e1e3a; border-radius: 16px;
+    margin: 24px 0; overflow: hidden; transition: border-color 0.3s;
+  }
+  .section.active { border-color: #53a8b6; }
+  .section.done { border-color: #4CAF50; opacity: 0.7; }
+  .section-header {
+    padding: 20px 24px; cursor: pointer; display: flex; align-items: center; gap: 16px; user-select: none;
+  }
+  .section-header:hover { background: #16163a; }
+  .step-num {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: #1a1a3e; border: 2px solid #53a8b6;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 18px; color: #53a8b6; flex-shrink: 0; transition: all 0.3s;
+  }
+  .section.done .step-num { background: #4CAF50; border-color: #4CAF50; color: white; }
+  .section.done .step-num::after { content: '\2713'; }
+  .section.done .step-num span { display: none; }
+  .step-title { font-size: 18px; font-weight: 600; }
+  .step-subtitle { font-size: 13px; color: #888; }
+  .section-body { padding: 0 24px 24px; display: none; }
+  .section.active .section-body { display: block; }
+  .instruction {
+    background: #1a1a3e; border-radius: 12px; padding: 20px;
+    margin: 16px 0; border-left: 4px solid #53a8b6;
+  }
+  .instruction.warning { border-left-color: #e94560; background: #1a1020; }
+  .instruction.success { border-left-color: #4CAF50; background: #0a1a10; }
+  .instruction h4 { color: #53a8b6; font-size: 14px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+  .instruction.warning h4 { color: #e94560; }
+  .instruction.success h4 { color: #4CAF50; }
+  .instruction p { font-size: 15px; }
+  .instruction strong { color: #fff; }
+  .diagram {
+    background: #080818; border: 1px solid #222; border-radius: 12px;
+    padding: 20px; margin: 16px 0; overflow-x: auto;
+  }
+  .diagram pre {
+    font-family: 'SF Mono', 'Menlo', 'Courier New', monospace;
+    font-size: 13px; line-height: 2; color: #bbb; white-space: pre; margin: 0;
+  }
+  .hl { color: #53a8b6; font-weight: 700; }
+  .rd { color: #e94560; font-weight: 700; }
+  .gn { color: #4CAF50; font-weight: 700; }
+  .bl { color: #5599ff; font-weight: 700; }
+  .yl { color: #f0c040; font-weight: 700; }
+  .or { color: #f0a050; font-weight: 700; }
+  .wh { color: #ffffff; font-weight: 700; }
+  .dm { color: #666; }
+  .hole {
+    display: inline-block; background: #2a2a4e; border: 1px solid #53a8b6;
+    border-radius: 4px; padding: 1px 6px; font-family: monospace; font-size: 13px; color: #53a8b6;
+  }
+  .check-btn {
+    display: block; width: 100%; padding: 14px;
+    background: #1a3a2a; border: 2px solid #4CAF50; border-radius: 12px;
+    color: #4CAF50; font-size: 16px; font-weight: 600;
+    cursor: pointer; text-align: center; margin-top: 16px; transition: all 0.2s;
+  }
+  .check-btn:hover { background: #4CAF50; color: white; }
+  .check-btn.checked { background: #4CAF50; color: white; cursor: default; }
+  .tip {
+    background: #1a1a2a; border: 1px dashed #444; border-radius: 8px;
+    padding: 12px 16px; margin: 12px 0; font-size: 13px; color: #999; text-align: center;
+  }
+  .test-section {
+    background: linear-gradient(135deg, #0f2a1a, #1a1a3e);
+    border: 2px solid #4CAF50; border-radius: 16px;
+    padding: 32px 24px; margin: 32px 0; text-align: center;
+  }
+  .test-section h2 { color: #4CAF50; font-size: 24px; margin-bottom: 12px; }
+  .big-diagram {
+    background: #050510; border: 2px solid #333; border-radius: 16px;
+    padding: 24px; margin: 20px 0; overflow-x: auto;
+  }
+  .big-diagram pre { font-size: 12px; line-height: 1.9; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Breadboard Wiring Guide</h1>
+  <p>FreeClimber RING Assay — Pi 4 to 2HSS86 Driver</p>
+</header>
+
+<div class="progress-bar">
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  <div class="progress-text" id="progressText">0 of 13 steps complete</div>
+</div>
+
+<div class="container">
+
+<!-- ============================================================ -->
+<!-- KEY CONCEPT -->
+<!-- ============================================================ -->
+<div class="section active" id="step0">
+  <div class="section-header" onclick="toggleSection('step0')">
+    <div class="step-num" style="background:#e94560;border-color:#e94560;color:white;font-size:13px"><span>!</span></div>
+    <div>
+      <div class="step-title">Before You Start — Two Things to Know</div>
+      <div class="step-subtitle">Transistor pinout + how the breadboard works</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="instruction warning">
+      <h4>1. Transistor Pins</h4>
+      <p>Hold it with the <strong>flat side facing you</strong>, legs pointing down:</p>
+    </div>
+    <div class="diagram">
+<pre>
+         FLAT SIDE (you can read the text)
+         ┌───────────────────┐
+         │      2N2222       │
+         └───────────────────┘
+           │       │       │
+           <span class="gn">E</span>       <span class="yl">B</span>       <span class="rd">C</span>
+        <span class="gn">LEFT</span>    <span class="yl">MIDDLE</span>    <span class="rd">RIGHT</span>
+       <span class="gn">EMITTER</span>   <span class="yl">BASE</span>   <span class="rd">COLLECTOR</span>
+</pre>
+    </div>
+    <div class="instruction">
+      <h4>2. How YOUR Breadboard is Laid Out</h4>
+      <p>Hold the board with the <strong>letters a-e on the bottom half</strong> and <strong>f-j on the top half</strong>. Row numbers go <strong>left (1) to right (30)</strong>. The <strong>blue ground rails</strong> are on the <strong>outer edges</strong> (very top and very bottom of the board).</p>
+    </div>
+    <div class="diagram">
+<pre>
+  <span class="bl">━ BLUE (–) ground rail ━━━━━━━━━━━━━━━━━</span>   ← very top edge
+  <span class="rd">━ RED (+) power rail ━━━━━━━━━━━━━━━━━━━</span>
+
+     f  g  h  i  j     ← top half (rows go 1→30 left to right)
+     ·  ·  ·  ·  ·
+     ─────────────      ← CENTER GAP
+     a  b  c  d  e     ← bottom half (WE USE THIS HALF)
+     ·  ·  ·  ·  ·
+
+  <span class="rd">━ RED (+) power rail ━━━━━━━━━━━━━━━━━━━</span>
+  <span class="bl">━ BLUE (–) ground rail ━━━━━━━━━━━━━━━━━</span>   ← very bottom edge
+</pre>
+    </div>
+    <div class="instruction">
+      <h4>3. Key Rule</h4>
+      <p>Each transistor leg goes in a <strong>different row</strong>. We spread the legs apart so each leg gets its own row. Because <strong>all 5 holes in a row (a through e) are connected underneath</strong>, putting a wire in any col of a row connects to everything else in that row. This gives us room for all our wires.</p>
+    </div>
+    <button class="check-btn" onclick="completeStep('step0')">Got it — let's start</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 1: Transistor 1 -->
+<!-- ============================================================ -->
+<div class="section" id="step1">
+  <div class="section-header" onclick="toggleSection('step1')">
+    <div class="step-num"><span>1</span></div>
+    <div>
+      <div class="step-title">Place Transistor 1 (PULSE)</div>
+      <div class="step-subtitle">Spread legs into rows 4, 5, 6 — column a</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="instruction">
+      <h4>What to do</h4>
+      <p>Take one 2N2222 transistor. Hold it with <strong>flat side facing you</strong>. Gently spread the legs apart so they're about 2.5mm (one row) apart. Then push each leg into <strong>column a</strong>:</p>
+      <p><br>
+        Emitter (left leg) → <span class="hole">Row 4, col a</span><br><br>
+        Base (middle leg) → <span class="hole">Row 5, col a</span><br><br>
+        Collector (right leg) → <span class="hole">Row 6, col a</span>
+      </p>
+    </div>
+    <div class="diagram">
+<pre>
+     a     b     c     d     e
+  3  ·     ·     ·     ·     ·
+  <span class="wh">4</span>  <span class="gn">[E]</span>    ·     ·     ·     ·     ← <span class="gn">Emitter (left leg)</span>
+  <span class="wh">5</span>  <span class="yl">[B]</span>    ·     ·     ·     ·     ← <span class="yl">Base (middle leg)</span>
+  <span class="wh">6</span>  <span class="rd">[C]</span>    ·     ·     ·     ·     ← <span class="rd">Collector (right leg)</span>
+  7  ·     ·     ·     ·     ·
+</pre>
+    </div>
+    <div class="tip">The transistor body will hover above the board between rows 4-6. The legs go straight down into column a. This is normal.</div>
+    <button class="check-btn" onclick="completeStep('step1')">Transistor 1 placed</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 2: Transistor 2 -->
+<!-- ============================================================ -->
+<div class="section" id="step2">
+  <div class="section-header" onclick="toggleSection('step2')">
+    <div class="step-num"><span>2</span></div>
+    <div>
+      <div class="step-title">Place Transistor 2 (DIRECTION)</div>
+      <div class="step-subtitle">Spread legs into rows 14, 15, 16 — column a</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="instruction">
+      <h4>What to do</h4>
+      <p>Same thing, 10 rows down. Spread legs, flat side facing you:</p>
+      <p><br>
+        Emitter (left leg) → <span class="hole">Row 14, col a</span><br><br>
+        Base (middle leg) → <span class="hole">Row 15, col a</span><br><br>
+        Collector (right leg) → <span class="hole">Row 16, col a</span>
+      </p>
+    </div>
+    <div class="diagram">
+<pre>
+     a     b     c     d     e
+  13 ·     ·     ·     ·     ·
+  <span class="wh">14</span> <span class="gn">[E]</span>    ·     ·     ·     ·     ← <span class="gn">Emitter</span>
+  <span class="wh">15</span> <span class="yl">[B]</span>    ·     ·     ·     ·     ← <span class="yl">Base</span>
+  <span class="wh">16</span> <span class="rd">[C]</span>    ·     ·     ·     ·     ← <span class="rd">Collector</span>
+  17 ·     ·     ·     ·     ·
+</pre>
+    </div>
+    <button class="check-btn" onclick="completeStep('step2')">Transistor 2 placed</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 3: Ground Emitter 1 -->
+<!-- ============================================================ -->
+<div class="section" id="step3">
+  <div class="section-header" onclick="toggleSection('step3')">
+    <div class="step-num"><span>3</span></div>
+    <div>
+      <div class="step-title">Connect Emitter 1 to Ground</div>
+      <div class="step-subtitle">Red short wire from Row 4 col e → blue minus rail above</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="instruction">
+      <h4>Find the ground rail</h4>
+      <p>Look at the <strong>very bottom edge</strong> of your breadboard — below the a-e rows. You'll see a strip of holes along a <strong>blue line with a minus sign (–)</strong>. That's the ground rail. Every hole along that blue line is connected to every other hole on it.</p>
+    </div>
+    <div class="instruction">
+      <h4>What to do</h4>
+      <p>Take a <strong class="rd">short RED male-to-male wire</strong>.</p>
+      <p><br>
+        One end → <span class="hole">Row 4, col e</span> (this is the emitter's row — col e connects to the emitter in col a)<br><br>
+        Other end → <span class="hole">Any hole on the BOTTOM blue – rail</span> (the one closest to the a-e rows, pick the hole nearest to row 4)
+      </p>
+    </div>
+    <div class="diagram">
+<pre>
+     a     b     c     d     e
+  3  ·     ·     ·     ·     ·
+  <span class="wh">4</span>  <span class="gn">[E]</span>    ·     ·     ·    <span class="rd">[●]</span>   ← <span class="rd">red wire goes here (row 4 col e)</span>
+  <span class="wh">5</span>  <span class="yl">[B]</span>    ·     ·     ·     ·            <span class="rd">│</span>
+  <span class="wh">6</span>  <span class="rd">[C]</span>    ·     ·     ·     ·            <span class="rd">│</span>  red wire
+                                          <span class="rd">│</span>  (goes DOWN)
+  <span class="rd">━ RED (+) power rail ━━━━━━━━━━━━━━━━━━</span>  <span class="rd">│</span>
+  <span class="bl">━ BLUE (–) ━  ·   ·   ·  </span><span class="rd">[●]</span><span class="bl">  ·   ·   ·</span>  ← <span class="rd">other end here</span>
+  <span class="bl">GROUND RAIL (very bottom edge)</span>
+</pre>
+    </div>
+    <div class="instruction success">
+      <h4>Why this works</h4>
+      <p>Row 4 holes a through e are all connected underneath. The emitter leg is in col a. Your wire in col e is electrically connected to the emitter through the row. The other end goes down to the ground rail at the bottom. <strong>Result: emitter is grounded.</strong></p>
+    </div>
+    <button class="check-btn" onclick="completeStep('step3')">Emitter 1 grounded</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 4: Ground Emitter 2 -->
+<!-- ============================================================ -->
+<div class="section" id="step4">
+  <div class="section-header" onclick="toggleSection('step4')">
+    <div class="step-num"><span>4</span></div>
+    <div>
+      <div class="step-title">Connect Emitter 2 to Ground</div>
+      <div class="step-subtitle">Red short wire from Row 14 col e → blue minus rail</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="instruction">
+      <h4>What to do</h4>
+      <p>Take the other <strong class="rd">short RED male-to-male wire</strong>.</p>
+      <p><br>
+        One end → <span class="hole">Row 14, col e</span><br><br>
+        Other end → <span class="hole">Bottom blue – rail</span> (pick the hole nearest to row 14)
+      </p>
+    </div>
+    <div class="diagram">
+<pre>
+     a     b     c     d     e
+  <span class="wh">14</span> <span class="gn">[E]</span>    ·     ·     ·    <span class="rd">[●]</span>   ← red wire here
+  <span class="wh">15</span> <span class="yl">[B]</span>    ·     ·     ·     ·         <span class="rd">│</span>
+  <span class="wh">16</span> <span class="rd">[C]</span>    ·     ·     ·     ·         <span class="rd">│</span> goes DOWN
+                                       <span class="rd">│</span>
+  <span class="rd">━ RED (+) ━━━━━━━━━━━━━━━━━━━━━━</span>    <span class="rd">│</span>
+  <span class="bl">━ BLUE (–) ━  ·   ·  </span><span class="rd">[●]</span><span class="bl">  ·   ·</span>    ← other end
+</pre>
+    </div>
+    <div class="instruction success">
+      <h4>Check yourself</h4>
+      <p>You should now have <strong>2 red wires</strong> making short bridges from the main grid up to the blue ground rail. One near row 4, one near row 14.</p>
+    </div>
+    <button class="check-btn" onclick="completeStep('step4')">Emitter 2 grounded</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 5: Resistor 1 -->
+<!-- ============================================================ -->
+<div class="section" id="step5">
+  <div class="section-header" onclick="toggleSection('step5')">
+    <div class="step-num"><span>5</span></div>
+    <div>
+      <div class="step-title">Place Resistor 1</div>
+      <div class="step-subtitle">Blue resistor bridges Row 2 col c to Row 5 col c</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="instruction">
+      <h4>What to do</h4>
+      <p>Take one <strong>blue 1K resistor</strong>. Bend the legs so they're about 3 rows apart. Insert:</p>
+      <p><br>
+        One leg → <span class="hole">Row 2, col c</span> (this row will receive the Pi signal)<br><br>
+        Other leg → <span class="hole">Row 5, col c</span> (this is the Base row — connects to the base in col a)
+      </p>
+    </div>
+    <div class="diagram">
+<pre>
+     a     b     c     d     e
+  <span class="wh">2</span>  ·     ·    <span class="or">[R1]</span>    ·     ·     ← <span class="or">resistor top</span> (Pi signal enters here)
+  3  ·     ·     <span class="or">│</span>     ·     ·
+  4  <span class="gn">[E]</span>    ·     <span class="or">│</span>     ·    <span class="rd">[gnd]</span>
+  <span class="wh">5</span>  <span class="yl">[B]</span>    ·    <span class="or">[R1]</span>    ·     ·     ← <span class="or">resistor bottom</span> (connects to base)
+  6  <span class="rd">[C]</span>    ·     ·     ·     ·
+</pre>
+    </div>
+    <div class="instruction success">
+      <h4>Why this works</h4>
+      <p>The resistor bridges from Row 2 to Row 5. The base leg is in Row 5 col a. Since all of Row 5 (a-e) is connected, the resistor in col c connects to the base in col a. The Pi signal will enter Row 2, go through the resistor, and reach the base.</p>
+    </div>
+    <button class="check-btn" onclick="completeStep('step5')">Resistor 1 placed</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 6: Resistor 2 -->
+<!-- ============================================================ -->
+<div class="section" id="step6">
+  <div class="section-header" onclick="toggleSection('step6')">
+    <div class="step-num"><span>6</span></div>
+    <div>
+      <div class="step-title">Place Resistor 2</div>
+      <div class="step-subtitle">Blue resistor bridges Row 12 col c to Row 15 col c</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="instruction">
+      <h4>What to do</h4>
+      <p>Take the second <strong>blue 1K resistor</strong>:</p>
+      <p><br>
+        One leg → <span class="hole">Row 12, col c</span><br><br>
+        Other leg → <span class="hole">Row 15, col c</span>
+      </p>
+    </div>
+    <div class="diagram">
+<pre>
+     a     b     c     d     e
+  <span class="wh">12</span> ·     ·    <span class="or">[R2]</span>    ·     ·     ← <span class="or">resistor top</span>
+  13 ·     ·     <span class="or">│</span>     ·     ·
+  14 <span class="gn">[E]</span>    ·     <span class="or">│</span>     ·    <span class="rd">[gnd]</span>
+  <span class="wh">15</span> <span class="yl">[B]</span>    ·    <span class="or">[R2]</span>    ·     ·     ← <span class="or">resistor bottom</span>
+  16 <span class="rd">[C]</span>    ·     ·     ·     ·
+</pre>
+    </div>
+    <button class="check-btn" onclick="completeStep('step6')">Resistor 2 placed</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 7: Pi GND -->
+<!-- ============================================================ -->
+<div class="section" id="step7">
+  <div class="section-header" onclick="toggleSection('step7')">
+    <div class="step-num"><span>7</span></div>
+    <div>
+      <div class="step-title">Pi Ground → Breadboard Ground Rail</div>
+      <div class="step-subtitle">Blue short wire: Pi Pin 6 → blue minus rail</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="instruction">
+      <h4>What to do</h4>
+      <p>Take a <strong>male-to-female jumper wire</strong> from your rainbow kit (any color — suggest <strong>black or green</strong>).</p>
+      <p><br>
+        Female end → <span class="hole">Pi Physical Pin 6 (GND)</span><br><br>
+        Male end → <span class="hole">Bottom blue minus (–) rail on breadboard</span> (any hole on it)
+      </p>
+    </div>
+    <div class="instruction">
+      <h4>Finding Pin 6</h4>
+      <p>Orient the Pi with the <strong>USB ports facing away from you</strong>. The GPIO header is the double row of 40 pins. Pin 6 is the <strong>3rd pin from the top on the RIGHT column</strong>:</p>
+    </div>
+    <div class="diagram">
+<pre>
+  GPIO HEADER (USB ports away from you)
+
+  Left col             Right col
+  ────────             ─────────
+  (1)  3.3V    ●    ●    (2)  5V
+  (3)  GPIO2   ●    ●    (4)  5V
+  (5)  GPIO3   ●    ●    <span class="hl">(6)  GND  ◄── THIS PIN</span>
+  (7)  GPIO4   ●    ●    (8)  TX
+  (9)  GND     ●    ●    (10) RX
+  (11) GPIO17  ●    ●    (12) GPIO18
+  (13) GPIO27  ●    ●    (14) GND
+
+  Count from top-right: <span class="hl">(2)... (4)... (6) = third pin down</span>
+</pre>
+    </div>
+    <button class="check-btn" onclick="completeStep('step7')">Ground connected to Pi</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 8: Pi GPIO 17 -->
+<!-- ============================================================ -->
+<div class="section" id="step8">
+  <div class="section-header" onclick="toggleSection('step8')">
+    <div class="step-num"><span>8</span></div>
+    <div>
+      <div class="step-title">Pi Pin 11 (PULSE signal) → Breadboard</div>
+      <div class="step-subtitle">Male-to-female wire → Row 2, col e</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="instruction">
+      <h4>What to do</h4>
+      <p>Take a <strong>male-to-female jumper wire</strong> from your rainbow kit (suggest <strong class="yl">YELLOW</strong> so you can identify the pulse signal).</p>
+      <p><br>
+        Female end → <span class="hole">Pi Physical Pin 11 (GPIO 17)</span><br><br>
+        Male end → <span class="hole">Row 2, col e</span> on breadboard
+      </p>
+    </div>
+    <div class="instruction">
+      <h4>Finding Pin 11</h4>
+      <p><strong>6th pin from the top on the LEFT column.</strong> Count: (1), (3), (5), (7), (9), <strong>(11)</strong>.</p>
+    </div>
+    <div class="diagram">
+<pre>
+  (9)  GND     ●    ●    (10) RX
+  <span class="hl">(11) GPIO17  ◄── THIS PIN</span>    ●    (12) GPIO18
+  (13) GPIO27  ●    ●    (14) GND
+</pre>
+    </div>
+    <div class="instruction success">
+      <h4>Signal path</h4>
+      <p>Pi GPIO 17 → wire → Row 2 col e → (Row 2 is all connected) → Resistor top in Row 2 col c → through resistor → Row 5 col c → (Row 5 is all connected) → Base in Row 5 col a → <strong>transistor receives the pulse signal!</strong></p>
+    </div>
+    <button class="check-btn" onclick="completeStep('step8')">Pulse signal connected</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 9: Pi GPIO 27 -->
+<!-- ============================================================ -->
+<div class="section" id="step9">
+  <div class="section-header" onclick="toggleSection('step9')">
+    <div class="step-num"><span>9</span></div>
+    <div>
+      <div class="step-title">Pi Pin 13 (DIRECTION signal) → Breadboard</div>
+      <div class="step-subtitle">Male-to-female wire → Row 12, col e</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="instruction">
+      <h4>What to do</h4>
+      <p>Take another <strong>male-to-female jumper wire</strong> from your rainbow kit (suggest <strong class="or">ORANGE</strong> so you can identify the direction signal).</p>
+      <p><br>
+        Female end → <span class="hole">Pi Physical Pin 13 (GPIO 27)</span><br><br>
+        Male end → <span class="hole">Row 12, col e</span> on breadboard
+      </p>
+    </div>
+    <div class="instruction">
+      <h4>Finding Pin 13</h4>
+      <p><strong>7th pin from the top on the LEFT column.</strong> It's the pin directly below Pin 11.</p>
+    </div>
+    <div class="diagram">
+<pre>
+  <span class="hl">(11) GPIO17</span>  ●    ●    (12) GPIO18
+  <span class="hl">(13) GPIO27  ◄── THIS PIN</span>    ●    (14) GND
+</pre>
+    </div>
+    <button class="check-btn" onclick="completeStep('step9')">Direction signal connected</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 10: PUL- wire -->
+<!-- ============================================================ -->
+<div class="section" id="step10">
+  <div class="section-header" onclick="toggleSection('step10')">
+    <div class="step-num"><span>10</span></div>
+    <div>
+      <div class="step-title">Driver PUL- (green wire) → Breadboard</div>
+      <div class="step-subtitle">Green wire from driver → Row 6, col e</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="instruction">
+      <h4>What to do</h4>
+      <p>The <strong class="gn">GREEN wire</strong> that's already plugged into <strong>PUL-</strong> on the 2HSS86 driver — take its other end and plug it into:</p>
+      <p><br><span class="hole">Row 6, col e</span></p>
+    </div>
+    <div class="instruction success">
+      <h4>Why Row 6?</h4>
+      <p>Row 6 is the <strong>collector row</strong> for Transistor 1. The collector leg is in Row 6 col a. Your wire in col e connects to the collector through the row. When the transistor turns ON, current flows from PUL- through the collector to the emitter (ground), completing the circuit.</p>
+    </div>
+    <button class="check-btn" onclick="completeStep('step10')">PUL- connected</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 11: DIR- wire -->
+<!-- ============================================================ -->
+<div class="section" id="step11">
+  <div class="section-header" onclick="toggleSection('step11')">
+    <div class="step-num"><span>11</span></div>
+    <div>
+      <div class="step-title">Driver DIR- (green wire) → Breadboard</div>
+      <div class="step-subtitle">Green wire from driver → Row 16, col e</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="instruction">
+      <h4>What to do</h4>
+      <p>The other <strong class="gn">GREEN wire</strong> from the driver's <strong>DIR-</strong> terminal — plug its other end into:</p>
+      <p><br><span class="hole">Row 16, col e</span></p>
+    </div>
+    <div class="instruction success">
+      <h4>Why Row 16?</h4>
+      <p>Row 16 = Transistor 2's collector row. Same logic as step 10.</p>
+    </div>
+    <button class="check-btn" onclick="completeStep('step11')">DIR- connected</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 12: PUL+ to 5V -->
+<!-- ============================================================ -->
+<div class="section" id="step12">
+  <div class="section-header" onclick="toggleSection('step12')">
+    <div class="step-num"><span>12</span></div>
+    <div>
+      <div class="step-title">Driver PUL+ (black wire) → Pi 5V</div>
+      <div class="step-subtitle">Black wire from driver → Pi Pin 2</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="instruction">
+      <h4>What to do</h4>
+      <p>The <strong>BLACK wire</strong> from the driver's <strong>PUL+</strong> terminal — plug its female end onto:</p>
+      <p><br><span class="hole">Pi Physical Pin 2 (5V)</span> — <strong>1st pin on the RIGHT column, very top</strong></p>
+    </div>
+    <div class="diagram">
+<pre>
+  (1)  3.3V    ●    ●    <span class="hl">(2)  5V  ◄── BLACK wire here</span>
+  (3)  GPIO2   ●    ●    (4)  5V
+</pre>
+    </div>
+    <button class="check-btn" onclick="completeStep('step12')">PUL+ powered</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STEP 13: DIR+ to 5V -->
+<!-- ============================================================ -->
+<div class="section" id="step13">
+  <div class="section-header" onclick="toggleSection('step13')">
+    <div class="step-num"><span>13</span></div>
+    <div>
+      <div class="step-title">Driver DIR+ (blue wire) → Pi 5V</div>
+      <div class="step-subtitle">Blue wire from driver → Pi Pin 4</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="instruction">
+      <h4>What to do</h4>
+      <p>The <strong class="bl">BLUE wire</strong> from the driver's <strong>DIR+</strong> terminal — plug its female end onto:</p>
+      <p><br><span class="hole">Pi Physical Pin 4 (5V)</span> — <strong>2nd pin on the RIGHT column</strong></p>
+    </div>
+    <div class="diagram">
+<pre>
+  (1)  3.3V    ●    ●    (2)  5V   ← PUL+ black
+  (3)  GPIO2   ●    ●    <span class="hl">(4)  5V  ◄── BLUE wire here</span>
+</pre>
+    </div>
+    <button class="check-btn" onclick="completeStep('step13')">DIR+ powered — ALL DONE!</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- COMPLETE MAP -->
+<!-- ============================================================ -->
+<div class="section" id="summary">
+  <div class="section-header" onclick="toggleSection('summary')">
+    <div class="step-num" style="background:#53a8b6;border-color:#53a8b6;color:white;font-size:12px"><span>MAP</span></div>
+    <div>
+      <div class="step-title">Complete Wiring Map</div>
+      <div class="step-subtitle">Everything in one diagram</div>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="big-diagram">
+<pre>
+  <span class="bl">━━━━ BLUE – GROUND RAIL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>
+            <span class="rd">↑</span>                                  <span class="rd">↑</span>
+            <span class="rd">│ red wire</span>                          <span class="rd">│ red wire</span>
+            <span class="rd">│</span>     <span class="bl">↑ blue wire to Pi Pin 6</span>        <span class="rd">│</span>
+            <span class="rd">│</span>                                    <span class="rd">│</span>
+     a      <span class="rd">│</span>   b     c     d     e           <span class="rd">│</span>
+  <span class="wh">2</span>  ·      <span class="rd">│</span>   ·    <span class="or">[R1]</span>    ·    <span class="hl">[← Pi Pin 11]</span>
+  3  ·      <span class="rd">│</span>   ·     <span class="or">│</span>     ·     ·
+  <span class="wh">4</span>  <span class="gn">[E1]</span>───<span class="rd">┘</span>   ·     <span class="or">│</span>     ·     ·           TRANSISTOR 1
+  <span class="wh">5</span>  <span class="yl">[B1]</span>       ·    <span class="or">[R1]</span>    ·     ·           (PULSE)
+  <span class="wh">6</span>  <span class="rd">[C1]</span>       ·     ·     ·    <span class="gn">[→ PUL-]</span>
+
+     ·       ·   ·     ·     ·     ·
+
+  <span class="wh">12</span> ·       ·   ·    <span class="or">[R2]</span>    ·    <span class="hl">[← Pi Pin 13]</span>
+  13 ·       <span class="rd">│</span>   ·     <span class="or">│</span>     ·     ·
+  <span class="wh">14</span> <span class="gn">[E2]</span>───<span class="rd">┘</span>   ·     <span class="or">│</span>     ·     ·           TRANSISTOR 2
+  <span class="wh">15</span> <span class="yl">[B2]</span>       ·    <span class="or">[R2]</span>    ·     ·           (DIRECTION)
+  <span class="wh">16</span> <span class="rd">[C2]</span>       ·     ·     ·    <span class="gn">[→ DIR-]</span>
+
+
+  <span class="wh">Pi Pin 2 (5V)  ←── BLACK wire from PUL+</span>
+  <span class="bl">Pi Pin 4 (5V)  ←── BLUE wire from DIR+</span>
+  <span class="bl">Pi Pin 6 (GND) ──→ breadboard blue – rail</span>
+  <span class="hl">Pi Pin 11 (GPIO17) ──→ Row 2 col e</span>
+  <span class="hl">Pi Pin 13 (GPIO27) ──→ Row 12 col e</span>
+</pre>
+    </div>
+  </div>
+</div>
+
+<!-- TEST -->
+<div class="test-section" id="testSection" style="display:none;">
+  <h2>Wiring Complete!</h2>
+  <p style="color:#bbb; margin-bottom:16px;">Tell Claude: <strong style="color:#53a8b6; font-size:20px;">"test the motor"</strong></p>
+</div>
+
+</div>
+
+<script>
+const totalSteps = 14;
+const completed = new Set();
+function toggleSection(id) {
+  const el = document.getElementById(id);
+  if (el.classList.contains('done')) { el.classList.toggle('active'); return; }
+  document.querySelectorAll('.section:not(.done)').forEach(s => { if (s.id !== id) s.classList.remove('active'); });
+  el.classList.toggle('active');
+}
+function completeStep(id) {
+  const el = document.getElementById(id);
+  if (completed.has(id)) return;
+  completed.add(id);
+  el.classList.remove('active');
+  el.classList.add('done');
+  el.querySelector('.check-btn').classList.add('checked');
+  el.querySelector('.check-btn').textContent = 'Done';
+  updateProgress();
+  const all = ['step0','step1','step2','step3','step4','step5','step6','step7','step8','step9','step10','step11','step12','step13'];
+  const idx = all.indexOf(id);
+  if (idx < all.length - 1) {
+    const next = document.getElementById(all[idx + 1]);
+    if (!next.classList.contains('done')) {
+      setTimeout(() => { next.classList.add('active'); next.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 300);
+    }
+  }
+  if (completed.size >= totalSteps) {
+    document.getElementById('testSection').style.display = 'block';
+    setTimeout(() => { document.getElementById('testSection').scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 500);
+  }
+}
+function updateProgress() {
+  const pct = Math.round((completed.size / totalSteps) * 100);
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressText').textContent = completed.size + ' of ' + totalSteps + ' steps complete' + (completed.size >= totalSteps ? ' — Ready to test!' : '');
+}
+</script>
+</body>
+</html>

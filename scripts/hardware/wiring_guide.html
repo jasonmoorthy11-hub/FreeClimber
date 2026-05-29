@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transistor Circuit Wiring Guide</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; max-width: 1200px; margin: 0 auto; }
+  h1 { color: #00d4ff; font-size: 28px; margin-bottom: 8px; }
+  h2 { color: #ff6b6b; font-size: 22px; margin: 40px 0 16px 0; border-bottom: 2px solid #ff6b6b; padding-bottom: 6px; }
+  p, li { font-size: 16px; line-height: 1.6; }
+  .subtitle { color: #aaa; font-size: 16px; margin-bottom: 30px; }
+  .warning { background: #4a1c1c; border: 2px solid #ff4444; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .warning strong { color: #ff4444; }
+  .tip { background: #1c3a4a; border: 2px solid #00d4ff; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .tip strong { color: #00d4ff; }
+  .success { background: #1c4a2a; border: 2px solid #44ff88; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .success strong { color: #44ff88; }
+  .step-card { background: #16213e; border-radius: 12px; padding: 24px; margin: 20px 0; border: 1px solid #333; }
+  .step-number { display: inline-block; background: #ff6b6b; color: #fff; width: 36px; height: 36px; border-radius: 50%; text-align: center; line-height: 36px; font-weight: bold; font-size: 18px; margin-right: 12px; }
+  .step-title { font-size: 20px; color: #fff; display: inline; vertical-align: middle; }
+  .step-content { display: flex; gap: 24px; margin-top: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .step-text { flex: 1; min-width: 280px; }
+  .step-diagram { flex-shrink: 0; }
+  svg { display: block; }
+  .pin-highlight { font-weight: bold; color: #ffd93d; }
+  .checklist { list-style: none; padding: 0; }
+  .checklist li { padding: 8px 0; padding-left: 30px; position: relative; font-size: 15px; }
+  .checklist li::before { content: "☐"; position: absolute; left: 0; color: #ffd93d; font-size: 18px; }
+
+  /* Shared SVG marker defs */
+</style>
+</head>
+<body>
+
+<h1>Transistor Level-Shifting Circuit</h1>
+<p class="subtitle">Step-by-step wiring guide — each step has its own diagram + real reference photos</p>
+
+<svg width="0" height="0">
+  <defs>
+    <marker id="aY" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#ffd93d"/></marker>
+    <marker id="aR" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#ff6b6b"/></marker>
+    <marker id="aB" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#00d4ff"/></marker>
+    <marker id="aG" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#44ff88"/></marker>
+    <marker id="aW" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#fff"/></marker>
+  </defs>
+</svg>
+
+<!-- ==================== STEP 0 ==================== -->
+<div class="step-card">
+  <span class="step-number">0</span>
+  <span class="step-title">Identify Your Parts</span>
+  <div class="step-content">
+    <div class="step-text">
+      <p>Grab these from the Smraza kit:</p>
+      <ul style="margin: 12px 0 0 20px;">
+        <li><strong>2× 2N2222 transistors</strong> — small black plastic with 3 metal legs and flat face with text</li>
+        <li><strong>2× 1K resistors</strong> — tiny cylinder with color bands: <span style="color:#8B4513">Brown</span>-<span style="color:#333;background:#eee;padding:0 4px;">Black</span>-<span style="color:#cc0000">Red</span>-<span style="color:#DAA520">Gold</span></li>
+        <li><strong>5× Female-to-male DuPont wires</strong> — one end has a socket (goes on Pi pin), other is a pin (goes in breadboard)</li>
+        <li><strong>4× Male-to-male jumper wires</strong> — pins on both ends (breadboard to breadboard or breadboard to driver)</li>
+        <li><strong>1× Breadboard</strong></li>
+      </ul>
+    </div>
+    <div class="step-diagram">
+      <svg width="480" height="240" viewBox="0 0 480 240">
+        <rect x="0" y="0" width="480" height="240" rx="8" fill="#16213e"/>
+        <!-- Transistor -->
+        <rect x="20" y="20" width="70" height="80" rx="5" fill="#1a1a1a" stroke="#888" stroke-width="2"/>
+        <text x="55" y="55" text-anchor="middle" fill="#aaa" font-size="11" font-weight="bold">2N2222</text>
+        <line x1="35" y1="100" x2="35" y2="120" stroke="#ccc" stroke-width="2"/>
+        <line x1="55" y1="100" x2="55" y2="120" stroke="#ccc" stroke-width="2"/>
+        <line x1="75" y1="100" x2="75" y2="120" stroke="#ccc" stroke-width="2"/>
+        <text x="55" y="140" text-anchor="middle" fill="#e0e0e0" font-size="12">Transistor ×2</text>
+
+        <!-- Resistor -->
+        <line x1="120" y1="55" x2="140" y2="55" stroke="#ccc" stroke-width="2"/>
+        <rect x="140" y="42" width="60" height="26" rx="4" fill="#e8c87a" stroke="#aa8833" stroke-width="2"/>
+        <rect x="150" y="42" width="6" height="26" fill="#8B4513"/>
+        <rect x="162" y="42" width="6" height="26" fill="#222"/>
+        <rect x="174" y="42" width="6" height="26" fill="#cc0000"/>
+        <rect x="190" y="42" width="4" height="26" fill="#DAA520"/>
+        <line x1="200" y1="55" x2="220" y2="55" stroke="#ccc" stroke-width="2"/>
+        <text x="170" y="90" text-anchor="middle" fill="#e0e0e0" font-size="12">1K Resistor ×2</text>
+        <text x="170" y="108" text-anchor="middle" fill="#999" font-size="10">Brown-Black-Red-Gold</text>
+
+        <!-- DuPont wire -->
+        <rect x="260" y="25" width="14" height="50" rx="2" fill="#333" stroke="#666"/>
+        <rect x="260" y="25" width="14" height="14" rx="2" fill="#444"/>
+        <rect x="262" y="28" width="10" height="8" rx="1" fill="#222"/>
+        <line x1="267" y1="75" x2="267" y2="90" stroke="#ccc" stroke-width="2"/>
+        <circle cx="267" cy="93" r="3" fill="#ccc"/>
+        <text x="267" y="118" text-anchor="middle" fill="#e0e0e0" font-size="11">Female-to-Male</text>
+        <text x="267" y="134" text-anchor="middle" fill="#e0e0e0" font-size="11">DuPont ×5</text>
+        <text x="267" y="154" text-anchor="middle" fill="#888" font-size="10">socket → Pi pin</text>
+        <text x="267" y="170" text-anchor="middle" fill="#888" font-size="10">pin → breadboard</text>
+
+        <!-- Jumper wire -->
+        <line x1="360" y1="40" x2="440" y2="40" stroke="#ff6b6b" stroke-width="3"/>
+        <circle cx="360" cy="40" r="4" fill="#ff6b6b"/>
+        <circle cx="440" cy="40" r="4" fill="#ff6b6b"/>
+        <line x1="360" y1="65" x2="440" y2="65" stroke="#4488ff" stroke-width="3"/>
+        <circle cx="360" cy="65" r="4" fill="#4488ff"/>
+        <circle cx="440" cy="65" r="4" fill="#4488ff"/>
+        <text x="400" y="100" text-anchor="middle" fill="#e0e0e0" font-size="11">Male-to-Male</text>
+        <text x="400" y="118" text-anchor="middle" fill="#e0e0e0" font-size="11">Jumper ×4</text>
+
+        <!-- Breadboard -->
+        <rect x="20" y="190" width="440" height="35" rx="5" fill="#e8dcc8" stroke="#bba" stroke-width="2"/>
+        <g fill="#555">
+          <circle cx="40" cy="202" r="2.5"/><circle cx="55" cy="202" r="2.5"/><circle cx="70" cy="202" r="2.5"/><circle cx="85" cy="202" r="2.5"/><circle cx="100" cy="202" r="2.5"/>
+          <circle cx="120" cy="202" r="2.5"/><circle cx="135" cy="202" r="2.5"/><circle cx="150" cy="202" r="2.5"/><circle cx="165" cy="202" r="2.5"/><circle cx="180" cy="202" r="2.5"/>
+          <circle cx="200" cy="202" r="2.5"/><circle cx="215" cy="202" r="2.5"/><circle cx="230" cy="202" r="2.5"/><circle cx="245" cy="202" r="2.5"/><circle cx="260" cy="202" r="2.5"/>
+          <circle cx="40" cy="215" r="2.5"/><circle cx="55" cy="215" r="2.5"/><circle cx="70" cy="215" r="2.5"/><circle cx="85" cy="215" r="2.5"/><circle cx="100" cy="215" r="2.5"/>
+          <circle cx="120" cy="215" r="2.5"/><circle cx="135" cy="215" r="2.5"/><circle cx="150" cy="215" r="2.5"/><circle cx="165" cy="215" r="2.5"/><circle cx="180" cy="215" r="2.5"/>
+        </g>
+        <text x="420" y="212" fill="#888" font-size="11">Breadboard ×1</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP 1: Transistor ID ==================== -->
+<div class="step-card">
+  <span class="step-number">1</span>
+  <span class="step-title">Identify the Transistor Pins (CRITICAL)</span>
+
+  <div class="warning" style="margin:16px 0;">
+    <strong>⚠ FIRST: Read the text printed on your transistor!</strong> Different variants have different pinouts:
+    <ul style="margin:8px 0 0 16px;">
+      <li><strong>If it says "2N2222A" or "PN2222A":</strong> Pin order is <strong style="color:#ff4444">E</strong>-<strong style="color:#ffd93d">B</strong>-<strong style="color:#00d4ff">C</strong> (Emitter left, Collector right)</li>
+      <li><strong>If it says "P2N2222A":</strong> Pin order is <strong style="color:#00d4ff">C</strong>-<strong style="color:#ffd93d">B</strong>-<strong style="color:#ff4444">E</strong> (Collector left, Emitter right) — <strong>REVERSED!</strong></li>
+    </ul>
+    <p style="margin-top:8px;">The Smraza kit most likely has <strong>2N2222A</strong> (E-B-C). Check the text on yours to be sure.</p>
+  </div>
+
+  <div class="step-content">
+    <div class="step-text">
+      <h3 style="margin-top:0">Real Reference Photo (2N2222A)</h3>
+      <p>This is what the actual component looks like. Hold it with <strong>flat side facing you</strong>, legs pointing down:</p>
+      <img src="img_transistor_pinout.jpg" alt="2N2222A transistor pinout" style="max-width:280px; border-radius:8px; border:2px solid #444; margin:12px 0;"/>
+      <p style="color:#999; font-size:13px;">Source: <a href="https://components101.com/transistors/2n2222a-pinout-equivalent-datasheet" style="color:#00d4ff;" target="_blank">components101.com</a></p>
+      <p style="margin-top:12px;">For the <strong>2N2222A</strong> (most common), the three pins from left to right are:</p>
+      <ul style="margin: 8px 0 0 20px;">
+        <li><strong style="color:#ff4444">Pin 1 (LEFT) = Emitter (E)</strong> — connects to ground</li>
+        <li><strong style="color:#ffd93d">Pin 2 (MIDDLE) = Base (B)</strong> — connects to resistor</li>
+        <li><strong style="color:#00d4ff">Pin 3 (RIGHT) = Collector (C)</strong> — connects to driver</li>
+      </ul>
+    </div>
+    <div class="step-diagram">
+      <svg width="380" height="270" viewBox="0 0 380 270">
+        <rect x="0" y="0" width="380" height="270" rx="8" fill="#16213e"/>
+        <!-- Transistor body -->
+        <rect x="90" y="20" width="200" height="100" rx="10" fill="#1a1a1a" stroke="#888" stroke-width="3"/>
+        <rect x="95" y="25" width="190" height="90" rx="8" fill="#222"/>
+        <text x="190" y="55" text-anchor="middle" fill="#e8a020" font-size="15" font-weight="bold">2N2222A</text>
+        <text x="190" y="75" text-anchor="middle" fill="#888" font-size="11">TO-92</text>
+        <text x="190" y="100" text-anchor="middle" fill="#666" font-size="12">FLAT SIDE → YOU</text>
+        <!-- Legs -->
+        <line x1="135" y1="120" x2="135" y2="165" stroke="#ccc" stroke-width="4" stroke-linecap="round"/>
+        <line x1="190" y1="120" x2="190" y2="165" stroke="#ccc" stroke-width="4" stroke-linecap="round"/>
+        <line x1="245" y1="120" x2="245" y2="165" stroke="#ccc" stroke-width="4" stroke-linecap="round"/>
+        <!-- Pin labels -->
+        <circle cx="135" cy="185" r="20" fill="#ff4444"/>
+        <text x="135" y="191" text-anchor="middle" fill="#fff" font-size="18" font-weight="bold">E</text>
+        <text x="135" y="228" text-anchor="middle" fill="#ff6b6b" font-size="12" font-weight="bold">EMITTER</text>
+        <text x="135" y="248" text-anchor="middle" fill="#ff6b6b" font-size="11">→ GND</text>
+
+        <circle cx="190" cy="185" r="20" fill="#ffd93d"/>
+        <text x="190" y="191" text-anchor="middle" fill="#333" font-size="18" font-weight="bold">B</text>
+        <text x="190" y="228" text-anchor="middle" fill="#ffd93d" font-size="12" font-weight="bold">BASE</text>
+        <text x="190" y="248" text-anchor="middle" fill="#ffd93d" font-size="11">→ Resistor</text>
+
+        <circle cx="245" cy="185" r="20" fill="#00d4ff"/>
+        <text x="245" y="191" text-anchor="middle" fill="#333" font-size="18" font-weight="bold">C</text>
+        <text x="245" y="228" text-anchor="middle" fill="#00d4ff" font-size="12" font-weight="bold">COLLECTOR</text>
+        <text x="245" y="248" text-anchor="middle" fill="#00d4ff" font-size="11">→ Driver</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="tip" style="margin-top:16px">
+    <strong>P2N2222A variant (reversed pinout):</strong> If your transistor says P2N2222A, just swap the Emitter and Collector positions — put Collector in Col A (left) and Emitter in Col C (right). Base stays in the middle. The breadboard row connections to GND and driver stay the same positions (Col A → GND, Col C → driver).
+  </div>
+</div>
+
+<!-- ==================== STEP 2: Find Pi Pins ==================== -->
+<div class="step-card">
+  <span class="step-number">2</span>
+  <span class="step-title">Locate the 5 Pi Pins You Need</span>
+  <div class="step-content">
+    <div class="step-text">
+      <p>Look at the Pi with <strong>USB ports facing down/toward you</strong>. The GPIO header is the 2×20 row of pins at the top edge.</p>
+      <p style="margin-top:12px;">You need exactly <strong>5 pins</strong>:</p>
+      <ul style="margin: 8px 0 0 20px;">
+        <li><strong style="color:#ff4444">Pin 2</strong> (5V) — top row, 1st from left</li>
+        <li><strong style="color:#ff4444">Pin 4</strong> (5V) — top row, 2nd from left</li>
+        <li><strong style="color:#ffd93d">Pin 6</strong> (GND) — top row, 3rd from left</li>
+        <li><strong style="color:#00d4ff">Pin 11</strong> (GPIO17) — bottom row, 6th from left</li>
+        <li><strong style="color:#44ff88">Pin 13</strong> (GPIO27) — bottom row, 7th from left</li>
+      </ul>
+      <p style="margin-top:12px; color:#999;">Pins zigzag: top row = even (2,4,6,8...), bottom row = odd (1,3,5,7...)</p>
+      <h3 style="margin-top:16px;">Real GPIO Header Photo</h3>
+      <img src="img_gpio_header.png" alt="Raspberry Pi GPIO header pinout" style="max-width:100%; border-radius:8px; border:2px solid #444; margin:8px 0;"/>
+      <p style="color:#999; font-size:13px;">Source: <a href="https://www.raspberrypi-spy.co.uk/2012/06/simple-guide-to-the-rpi-gpio-header-and-pins/" style="color:#00d4ff;" target="_blank">raspberrypi-spy.co.uk</a>. Your Pi 4 has the same pinout.</p>
+    </div>
+    <div class="step-diagram">
+      <svg width="500" height="340" viewBox="0 0 500 340">
+        <rect x="0" y="0" width="500" height="340" rx="8" fill="#16213e"/>
+        <!-- Pi board outline -->
+        <rect x="20" y="15" width="460" height="310" rx="12" fill="#0d6b3d" stroke="#0a5530" stroke-width="2"/>
+        <text x="250" y="310" text-anchor="middle" fill="#0a5530" font-size="11">RASPBERRY PI 4</text>
+        <!-- USB ports -->
+        <rect x="390" y="250" width="60" height="30" rx="3" fill="#bbb" stroke="#999" stroke-width="1"/>
+        <text x="420" y="270" text-anchor="middle" fill="#555" font-size="9">USB</text>
+        <rect x="390" y="210" width="60" height="30" rx="3" fill="#bbb" stroke="#999" stroke-width="1"/>
+        <text x="420" y="230" text-anchor="middle" fill="#555" font-size="9">USB</text>
+
+        <!-- Header background -->
+        <rect x="50" y="40" width="360" height="55" rx="3" fill="#222" stroke="#444"/>
+
+        <!-- TOP ROW (even pins) — spacing=38px -->
+        <text x="38" y="58" fill="#666" font-size="9">Pin:</text>
+        <!-- Pin 2 -->
+        <circle cx="80" cy="55" r="9" fill="#ff4444" stroke="#ff6666" stroke-width="2"/>
+        <text x="80" y="59" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">2</text>
+        <!-- Pin 4 -->
+        <circle cx="118" cy="55" r="9" fill="#ff4444" stroke="#ff6666" stroke-width="2"/>
+        <text x="118" y="59" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">4</text>
+        <!-- Pin 6 -->
+        <circle cx="156" cy="55" r="9" fill="#333" stroke="#ffd93d" stroke-width="3"/>
+        <text x="156" y="59" text-anchor="middle" fill="#ffd93d" font-size="10" font-weight="bold">6</text>
+        <!-- Pin 8 -->
+        <circle cx="194" cy="55" r="6" fill="#555"/><text x="194" y="59" text-anchor="middle" fill="#888" font-size="8">8</text>
+        <!-- Pin 10 -->
+        <circle cx="232" cy="55" r="6" fill="#555"/><text x="232" y="59" text-anchor="middle" fill="#888" font-size="8">10</text>
+        <!-- Pin 12 -->
+        <circle cx="270" cy="55" r="6" fill="#555"/><text x="270" y="59" text-anchor="middle" fill="#888" font-size="8">12</text>
+        <!-- Pin 14 -->
+        <circle cx="308" cy="55" r="6" fill="#555"/><text x="308" y="59" text-anchor="middle" fill="#888" font-size="8">14</text>
+        <!-- Pin 16 -->
+        <circle cx="346" cy="55" r="6" fill="#555"/><text x="346" y="59" text-anchor="middle" fill="#888" font-size="8">16</text>
+        <circle cx="384" cy="55" r="6" fill="#555"/>
+
+        <!-- BOTTOM ROW (odd pins) -->
+        <circle cx="80" cy="80" r="6" fill="#555"/><text x="80" y="84" text-anchor="middle" fill="#888" font-size="8">1</text>
+        <circle cx="118" cy="80" r="6" fill="#555"/><text x="118" y="84" text-anchor="middle" fill="#888" font-size="8">3</text>
+        <circle cx="156" cy="80" r="6" fill="#555"/><text x="156" y="84" text-anchor="middle" fill="#888" font-size="8">5</text>
+        <circle cx="194" cy="80" r="6" fill="#555"/><text x="194" y="84" text-anchor="middle" fill="#888" font-size="8">7</text>
+        <circle cx="232" cy="80" r="6" fill="#555"/><text x="232" y="84" text-anchor="middle" fill="#888" font-size="8">9</text>
+        <!-- Pin 11 -->
+        <circle cx="270" cy="80" r="9" fill="#00d4ff" stroke="#44eeff" stroke-width="2"/>
+        <text x="270" y="84" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">11</text>
+        <!-- Pin 13 -->
+        <circle cx="308" cy="80" r="9" fill="#44ff88" stroke="#66ffaa" stroke-width="2"/>
+        <text x="308" y="84" text-anchor="middle" fill="#333" font-size="10" font-weight="bold">13</text>
+        <circle cx="346" cy="80" r="6" fill="#555"/>
+        <circle cx="384" cy="80" r="6" fill="#555"/>
+
+        <!-- Labels — staggered with angled leader lines to avoid overlap -->
+        <!-- Pin 2: 5V → PUL+ -->
+        <rect x="30" y="105" width="60" height="42" rx="4" fill="#4a1c1c" stroke="#ff4444" stroke-width="1"/>
+        <line x1="80" y1="65" x2="60" y2="105" stroke="#ff4444" stroke-width="1" stroke-dasharray="3"/>
+        <text x="60" y="122" text-anchor="middle" fill="#ff6b6b" font-size="11" font-weight="bold">5V</text>
+        <text x="60" y="140" text-anchor="middle" fill="#ff6b6b" font-size="10">→ PUL+</text>
+
+        <!-- Pin 4: 5V → DIR+ (center) -->
+        <rect x="90" y="105" width="60" height="42" rx="4" fill="#4a1c1c" stroke="#ff4444" stroke-width="1"/>
+        <line x1="118" y1="65" x2="120" y2="105" stroke="#ff4444" stroke-width="1" stroke-dasharray="3"/>
+        <text x="120" y="122" text-anchor="middle" fill="#ff6b6b" font-size="11" font-weight="bold">5V</text>
+        <text x="120" y="140" text-anchor="middle" fill="#ff6b6b" font-size="10">→ DIR+</text>
+
+        <!-- Pin 6: GND → breadboard (angled right) -->
+        <rect x="152" y="105" width="68" height="42" rx="4" fill="#3a3a1c" stroke="#ffd93d" stroke-width="1"/>
+        <line x1="156" y1="65" x2="186" y2="105" stroke="#ffd93d" stroke-width="1" stroke-dasharray="3"/>
+        <text x="186" y="122" text-anchor="middle" fill="#ffd93d" font-size="11" font-weight="bold">GND</text>
+        <text x="186" y="140" text-anchor="middle" fill="#ffd93d" font-size="10">→ board</text>
+
+        <!-- Pin 11: GPIO17 PUL signal -->
+        <rect x="236" y="160" width="72" height="42" rx="4" fill="#1c3a4a" stroke="#00d4ff" stroke-width="1"/>
+        <line x1="270" y1="90" x2="272" y2="160" stroke="#00d4ff" stroke-width="1" stroke-dasharray="3"/>
+        <text x="272" y="177" text-anchor="middle" fill="#00d4ff" font-size="11" font-weight="bold">GPIO17</text>
+        <text x="272" y="195" text-anchor="middle" fill="#00d4ff" font-size="10">PUL signal</text>
+
+        <!-- Pin 13: GPIO27 DIR signal -->
+        <rect x="320" y="160" width="72" height="42" rx="4" fill="#1c4a2a" stroke="#44ff88" stroke-width="1"/>
+        <line x1="308" y1="90" x2="356" y2="160" stroke="#44ff88" stroke-width="1" stroke-dasharray="3"/>
+        <text x="356" y="177" text-anchor="middle" fill="#44ff88" font-size="11" font-weight="bold">GPIO27</text>
+        <text x="356" y="195" text-anchor="middle" fill="#44ff88" font-size="10">DIR signal</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== FULL BREADBOARD OVERVIEW ==================== -->
+<div class="step-card" style="border: 2px solid #ffd93d;">
+  <span class="step-number" style="background:#ffd93d;color:#333;">!</span>
+  <span class="step-title" style="color:#ffd93d;">Complete Breadboard Map — Where Everything Goes</span>
+  <p style="margin-top:12px; color:#ccc;">This shows your breadboard in the same horizontal orientation as your real board. Orient your board to match this exactly. Steps A-L below walk you through it one piece at a time.</p>
+
+  <div class="tip" style="margin:12px 0;">
+    <strong>How to orient your breadboard:</strong> Hold it <strong>horizontally</strong> (long side left-right). Row numbers (1, 2, 3...) go <strong>left to right</strong> along the center channel. Column letters are on the <strong>left side</strong> — upper half: j,i,h,g,f (we don't use these), lower half: e,d,c,b,a (our components go here). <strong>Blue (-) lines are on the outer edges, Red (+) lines on the inner edges.</strong> We only use the <strong>bottom blue (-) rail</strong> for ground.
+  </div>
+
+  <div style="overflow-x:auto; margin-top:16px;">
+    <svg width="860" height="600" viewBox="0 0 860 600">
+      <rect x="0" y="0" width="860" height="600" rx="8" fill="#16213e"/>
+
+      <!-- BOARD BODY with shadow -->
+      <rect x="53" y="23" width="480" height="370" rx="10" fill="#0a0a15" opacity="0.5"/>
+      <rect x="48" y="18" width="480" height="370" rx="10" fill="#f0ebe0" stroke="#c8c0b0" stroke-width="2"/>
+
+      <!-- TOP RAILS: Blue(-) outer, Red(+) inner -->
+      <rect x="80" y="24" width="440" height="3" rx="1" fill="#3355cc"/>
+      <text x="72" y="36" fill="#3355cc" font-size="8" text-anchor="end">-</text>
+      <g fill="none" stroke="#888" stroke-width="0.5">
+        <circle cx="95" cy="34" r="2.5"/><circle cx="133" cy="34" r="2.5"/><circle cx="171" cy="34" r="2.5"/><circle cx="209" cy="34" r="2.5"/><circle cx="247" cy="34" r="2.5"/>
+        <circle cx="285" cy="34" r="2.5"/><circle cx="323" cy="34" r="2.5"/><circle cx="361" cy="34" r="2.5"/><circle cx="399" cy="34" r="2.5"/><circle cx="437" cy="34" r="2.5"/>
+        <circle cx="475" cy="34" r="2.5"/><circle cx="508" cy="34" r="2.5"/>
+      </g>
+      <rect x="80" y="46" width="440" height="3" rx="1" fill="#dd3333"/>
+      <text x="72" y="56" fill="#dd3333" font-size="8" text-anchor="end">+</text>
+      <g fill="none" stroke="#888" stroke-width="0.5">
+        <circle cx="95" cy="54" r="2.5"/><circle cx="133" cy="54" r="2.5"/><circle cx="171" cy="54" r="2.5"/><circle cx="209" cy="54" r="2.5"/><circle cx="247" cy="54" r="2.5"/>
+        <circle cx="285" cy="54" r="2.5"/><circle cx="323" cy="54" r="2.5"/><circle cx="361" cy="54" r="2.5"/><circle cx="399" cy="54" r="2.5"/><circle cx="437" cy="54" r="2.5"/>
+        <circle cx="475" cy="54" r="2.5"/><circle cx="508" cy="54" r="2.5"/>
+      </g>
+      <text x="290" y="46" text-anchor="middle" fill="#bbb" font-size="8" font-style="italic">not used</text>
+
+      <!-- UPPER HALF labels + greyed holes -->
+      <text x="72" y="86" fill="#c8c0b0" font-size="10" text-anchor="end">j</text>
+      <text x="72" y="108" fill="#c8c0b0" font-size="10" text-anchor="end">i</text>
+      <text x="72" y="130" fill="#c8c0b0" font-size="10" text-anchor="end">h</text>
+      <text x="72" y="152" fill="#c8c0b0" font-size="10" text-anchor="end">g</text>
+      <text x="72" y="174" fill="#c8c0b0" font-size="10" text-anchor="end">f</text>
+      <g opacity="0.25">
+        <circle cx="95" cy="82" r="2.5" fill="none" stroke="#aaa"/><circle cx="133" cy="82" r="2.5" fill="none" stroke="#aaa"/><circle cx="171" cy="82" r="2.5" fill="none" stroke="#aaa"/><circle cx="209" cy="82" r="2.5" fill="none" stroke="#aaa"/><circle cx="247" cy="82" r="2.5" fill="none" stroke="#aaa"/><circle cx="285" cy="82" r="2.5" fill="none" stroke="#aaa"/><circle cx="323" cy="82" r="2.5" fill="none" stroke="#aaa"/><circle cx="361" cy="82" r="2.5" fill="none" stroke="#aaa"/><circle cx="399" cy="82" r="2.5" fill="none" stroke="#aaa"/><circle cx="437" cy="82" r="2.5" fill="none" stroke="#aaa"/><circle cx="475" cy="82" r="2.5" fill="none" stroke="#aaa"/><circle cx="508" cy="82" r="2.5" fill="none" stroke="#aaa"/>
+        <circle cx="95" cy="170" r="2.5" fill="none" stroke="#aaa"/><circle cx="133" cy="170" r="2.5" fill="none" stroke="#aaa"/><circle cx="171" cy="170" r="2.5" fill="none" stroke="#aaa"/><circle cx="209" cy="170" r="2.5" fill="none" stroke="#aaa"/><circle cx="247" cy="170" r="2.5" fill="none" stroke="#aaa"/><circle cx="285" cy="170" r="2.5" fill="none" stroke="#aaa"/><circle cx="323" cy="170" r="2.5" fill="none" stroke="#aaa"/><circle cx="361" cy="170" r="2.5" fill="none" stroke="#aaa"/><circle cx="399" cy="170" r="2.5" fill="none" stroke="#aaa"/><circle cx="437" cy="170" r="2.5" fill="none" stroke="#aaa"/><circle cx="475" cy="170" r="2.5" fill="none" stroke="#aaa"/><circle cx="508" cy="170" r="2.5" fill="none" stroke="#aaa"/>
+      </g>
+      <text x="300" y="132" text-anchor="middle" fill="#c8c0b0" font-size="11" font-style="italic">upper half — not used</text>
+
+      <!-- CENTER CHANNEL -->
+      <rect x="80" y="185" width="440" height="14" rx="2" fill="#d8d0c4" stroke="#c0b8a8" stroke-width="1"/>
+      <line x1="80" y1="190" x2="520" y2="190" stroke="#c0b8a8" stroke-width="0.5"/>
+      <line x1="80" y1="195" x2="520" y2="195" stroke="#c0b8a8" stroke-width="0.5"/>
+      <!-- Row numbers -->
+      <text x="95" y="196" text-anchor="middle" fill="#887766" font-size="8">1</text>
+      <text x="133" y="196" text-anchor="middle" fill="#887766" font-size="8">2</text>
+      <text x="171" y="196" text-anchor="middle" fill="#00aacc" font-size="9" font-weight="bold">3</text>
+      <text x="209" y="196" text-anchor="middle" fill="#887766" font-size="8">4</text>
+      <text x="247" y="196" text-anchor="middle" fill="#cc4444" font-size="9" font-weight="bold">5</text>
+      <text x="285" y="196" text-anchor="middle" fill="#887766" font-size="8">6</text>
+      <text x="323" y="196" text-anchor="middle" fill="#887766" font-size="8">7</text>
+      <text x="361" y="196" text-anchor="middle" fill="#22aa55" font-size="9" font-weight="bold">8</text>
+      <text x="399" y="196" text-anchor="middle" fill="#887766" font-size="8">9</text>
+      <text x="437" y="196" text-anchor="middle" fill="#22aa55" font-size="9" font-weight="bold">10</text>
+      <text x="475" y="196" text-anchor="middle" fill="#887766" font-size="8">11</text>
+      <text x="508" y="196" text-anchor="middle" fill="#887766" font-size="8">12</text>
+
+      <!-- LOWER HALF column labels -->
+      <text x="72" y="218" fill="#998877" font-size="11" font-weight="bold" text-anchor="end">e</text>
+      <text x="72" y="240" fill="#998877" font-size="11" font-weight="bold" text-anchor="end">d</text>
+      <text x="72" y="262" fill="#998877" font-size="11" font-weight="bold" text-anchor="end">c</text>
+      <text x="72" y="284" fill="#998877" font-size="11" font-weight="bold" text-anchor="end">b</text>
+      <text x="72" y="306" fill="#998877" font-size="11" font-weight="bold" text-anchor="end">a</text>
+
+      <!-- LOWER HALF HOLES — rows 1-12, columns e,d,c,b,a -->
+      <!-- Row 1 (empty) -->
+      <circle cx="95" cy="214" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="95" cy="236" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="95" cy="258" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="95" cy="280" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="95" cy="302" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+      <!-- Row 2 (empty) -->
+      <circle cx="133" cy="214" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="133" cy="236" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="133" cy="258" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="133" cy="280" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="133" cy="302" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+      <!-- Row 3: e3=GPIO17, d3=R1 top -->
+      <circle cx="171" cy="214" r="5.5" fill="#00d4ff" stroke="#0099cc" stroke-width="2"/>
+      <circle cx="171" cy="236" r="5.5" fill="#e8c87a" stroke="#aa8833" stroke-width="2"/>
+      <circle cx="171" cy="258" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+      <circle cx="171" cy="280" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+      <circle cx="171" cy="302" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+      <!-- Row 4 (empty) -->
+      <circle cx="209" cy="214" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="209" cy="236" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="209" cy="258" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="209" cy="280" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="209" cy="302" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+      <!-- Row 5: TRANSISTOR 1 — e5=empty, d5=R1 bot, c5=Collector, b5=Base, a5=Emitter -->
+      <circle cx="247" cy="214" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+      <circle cx="247" cy="236" r="5.5" fill="#e8c87a" stroke="#aa8833" stroke-width="2"/>
+      <circle cx="247" cy="258" r="6.5" fill="#00d4ff" stroke="#0099cc" stroke-width="2"/>
+      <circle cx="247" cy="280" r="6.5" fill="#ffd93d" stroke="#ccaa00" stroke-width="2"/>
+      <circle cx="247" cy="302" r="6.5" fill="#ff4444" stroke="#cc2222" stroke-width="2"/>
+      <text x="247" y="262" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">C</text>
+      <text x="247" y="284" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">B</text>
+      <text x="247" y="306" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">E</text>
+      <rect x="239" y="254" width="16" height="54" rx="5" fill="none" stroke="#555" stroke-width="1.5" stroke-dasharray="3"/>
+      <text x="233" y="284" text-anchor="end" fill="#666" font-size="7" transform="rotate(-90,233,284)">T1 PUL</text>
+      <!-- Row 6 (empty) -->
+      <circle cx="285" cy="214" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="285" cy="236" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="285" cy="258" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="285" cy="280" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="285" cy="302" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+      <!-- Row 7 (empty) -->
+      <circle cx="323" cy="214" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="323" cy="236" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="323" cy="258" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="323" cy="280" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="323" cy="302" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+      <!-- Row 8: e8=GPIO27, d8=R2 top -->
+      <circle cx="361" cy="214" r="5.5" fill="#44ff88" stroke="#22cc55" stroke-width="2"/>
+      <circle cx="361" cy="236" r="5.5" fill="#e8c87a" stroke="#aa8833" stroke-width="2"/>
+      <circle cx="361" cy="258" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+      <circle cx="361" cy="280" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+      <circle cx="361" cy="302" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+      <!-- Row 9 (empty) -->
+      <circle cx="399" cy="214" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="399" cy="236" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="399" cy="258" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="399" cy="280" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="399" cy="302" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+      <!-- Row 10: TRANSISTOR 2 — e10=empty, d10=R2 bot, c10=Collector, b10=Base, a10=Emitter -->
+      <circle cx="437" cy="214" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+      <circle cx="437" cy="236" r="5.5" fill="#e8c87a" stroke="#aa8833" stroke-width="2"/>
+      <circle cx="437" cy="258" r="6.5" fill="#00d4ff" stroke="#0099cc" stroke-width="2"/>
+      <circle cx="437" cy="280" r="6.5" fill="#ffd93d" stroke="#ccaa00" stroke-width="2"/>
+      <circle cx="437" cy="302" r="6.5" fill="#ff4444" stroke="#cc2222" stroke-width="2"/>
+      <text x="437" y="262" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">C</text>
+      <text x="437" y="284" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">B</text>
+      <text x="437" y="306" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">E</text>
+      <rect x="429" y="254" width="16" height="54" rx="5" fill="none" stroke="#555" stroke-width="1.5" stroke-dasharray="3"/>
+      <text x="423" y="284" text-anchor="end" fill="#666" font-size="7" transform="rotate(-90,423,284)">T2 DIR</text>
+      <!-- Row 11 (empty) -->
+      <circle cx="475" cy="214" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="475" cy="236" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="475" cy="258" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="475" cy="280" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="475" cy="302" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+      <!-- Row 12 (empty) -->
+      <circle cx="508" cy="214" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="508" cy="236" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="508" cy="258" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="508" cy="280" r="3" fill="none" stroke="#999" stroke-width="0.7"/><circle cx="508" cy="302" r="3" fill="none" stroke="#999" stroke-width="0.7"/>
+
+      <!-- RESISTOR 1: d3 to d5 (horizontal at y=236) -->
+      <line x1="177" y1="236" x2="188" y2="236" stroke="#aaa" stroke-width="1.5"/>
+      <rect x="188" y="228" width="40" height="16" rx="3" fill="#e8c87a" stroke="#aa8833" stroke-width="1.5"/>
+      <rect x="192" y="231" width="4" height="3" rx="1" fill="#8B4513"/>
+      <rect x="199" y="231" width="4" height="3" rx="1" fill="#222"/>
+      <rect x="206" y="231" width="4" height="3" rx="1" fill="#cc0000"/>
+      <rect x="213" y="232" width="3" height="2" rx="1" fill="#DAA520"/>
+      <line x1="228" y1="236" x2="241" y2="236" stroke="#aaa" stroke-width="1.5"/>
+      <text x="208" y="225" text-anchor="middle" fill="#e8c87a" font-size="8">R1 (1K)</text>
+
+      <!-- RESISTOR 2: d8 to d10 (horizontal at y=236) -->
+      <line x1="367" y1="236" x2="378" y2="236" stroke="#aaa" stroke-width="1.5"/>
+      <rect x="378" y="228" width="40" height="16" rx="3" fill="#e8c87a" stroke="#aa8833" stroke-width="1.5"/>
+      <rect x="382" y="231" width="4" height="3" rx="1" fill="#8B4513"/>
+      <rect x="389" y="231" width="4" height="3" rx="1" fill="#222"/>
+      <rect x="396" y="231" width="4" height="3" rx="1" fill="#cc0000"/>
+      <rect x="403" y="232" width="3" height="2" rx="1" fill="#DAA520"/>
+      <line x1="418" y1="236" x2="431" y2="236" stroke="#aaa" stroke-width="1.5"/>
+      <text x="398" y="225" text-anchor="middle" fill="#e8c87a" font-size="8">R2 (1K)</text>
+
+      <!-- BOTTOM RAILS: Red(+) inner, Blue(-) outer -->
+      <rect x="80" y="324" width="440" height="3" rx="1" fill="#dd3333"/>
+      <text x="72" y="332" fill="#dd3333" font-size="8" text-anchor="end">+</text>
+      <g fill="none" stroke="#888" stroke-width="0.5">
+        <circle cx="95" cy="332" r="2.5"/><circle cx="133" cy="332" r="2.5"/><circle cx="171" cy="332" r="2.5"/><circle cx="209" cy="332" r="2.5"/><circle cx="247" cy="332" r="2.5"/>
+        <circle cx="285" cy="332" r="2.5"/><circle cx="323" cy="332" r="2.5"/><circle cx="361" cy="332" r="2.5"/><circle cx="399" cy="332" r="2.5"/><circle cx="437" cy="332" r="2.5"/>
+        <circle cx="475" cy="332" r="2.5"/><circle cx="508" cy="332" r="2.5"/>
+      </g>
+      <rect x="80" y="346" width="440" height="3" rx="1" fill="#3355cc"/>
+      <text x="72" y="354" fill="#3355cc" font-size="8" text-anchor="end">-</text>
+      <g fill="none" stroke="#888" stroke-width="0.5">
+        <circle cx="95" cy="354" r="2.5"/><circle cx="133" cy="354" r="2.5"/><circle cx="171" cy="354" r="2.5"/><circle cx="209" cy="354" r="2.5"/><circle cx="247" cy="354" r="2.5"/>
+        <circle cx="285" cy="354" r="2.5"/><circle cx="323" cy="354" r="2.5"/><circle cx="361" cy="354" r="2.5"/><circle cx="399" cy="354" r="2.5"/><circle cx="437" cy="354" r="2.5"/>
+        <circle cx="475" cy="354" r="2.5"/><circle cx="508" cy="354" r="2.5"/>
+      </g>
+      <!-- Highlight bottom blue rail -->
+      <rect x="138" y="350" width="100" height="8" rx="3" fill="#3355cc" opacity="0.25" stroke="#3355cc" stroke-width="1"/>
+
+      <!-- EMITTER JUMPER WIRES to bottom blue(-) GND rail -->
+      <line x1="247" y1="310" x2="247" y2="350" stroke="#e6c619" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="247" cy="310" r="4" fill="#e6c619"/>
+      <circle cx="247" cy="352" r="4" fill="#e6c619"/>
+      <line x1="437" y1="310" x2="437" y2="350" stroke="#e6c619" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="437" cy="310" r="4" fill="#e6c619"/>
+      <circle cx="437" cy="352" r="4" fill="#e6c619"/>
+
+      <!-- ORIENTATION LABEL -->
+      <rect x="140" y="374" width="300" height="22" rx="6" fill="#ffd93d" opacity="0.15"/>
+      <text x="290" y="389" text-anchor="middle" fill="#ffd93d" font-size="12" font-weight="bold">THIS EDGE CLOSEST TO YOU</text>
+
+      <!-- OFF-BOARD ANNOTATIONS -->
+      <!-- e3 -> Pi Pin 11 (GPIO17) -->
+      <line x1="177" y1="214" x2="556" y2="214" stroke="#00d4ff" stroke-width="2" stroke-dasharray="5,3"/>
+      <rect x="560" y="200" width="145" height="32" rx="5" fill="#1c3a4a" stroke="#00d4ff" stroke-width="1"/>
+      <text x="632" y="214" text-anchor="middle" fill="#00d4ff" font-size="10" font-weight="bold">Pi Pin 11 (GPIO17)</text>
+      <text x="632" y="226" text-anchor="middle" fill="#00d4ff" font-size="9">PUL signal wire in e3</text>
+
+      <!-- c5 -> Driver PUL- -->
+      <line x1="255" y1="258" x2="556" y2="258" stroke="#00d4ff" stroke-width="2" stroke-dasharray="5,3"/>
+      <rect x="560" y="244" width="145" height="32" rx="5" fill="#1c3a4a" stroke="#00d4ff" stroke-width="1"/>
+      <text x="632" y="258" text-anchor="middle" fill="#00d4ff" font-size="10" font-weight="bold">Driver PUL-</text>
+      <text x="632" y="270" text-anchor="middle" fill="#00d4ff" font-size="9">wire from c5</text>
+
+      <!-- e8 -> Pi Pin 13 (GPIO27) -->
+      <line x1="367" y1="214" x2="556" y2="298" stroke="#44ff88" stroke-width="2" stroke-dasharray="5,3"/>
+      <rect x="560" y="284" width="145" height="32" rx="5" fill="#1c4a2a" stroke="#44ff88" stroke-width="1"/>
+      <text x="632" y="298" text-anchor="middle" fill="#44ff88" font-size="10" font-weight="bold">Pi Pin 13 (GPIO27)</text>
+      <text x="632" y="310" text-anchor="middle" fill="#44ff88" font-size="9">DIR signal wire in e8</text>
+
+      <!-- c10 -> Driver DIR- -->
+      <line x1="445" y1="258" x2="556" y2="338" stroke="#44ff88" stroke-width="2" stroke-dasharray="5,3"/>
+      <rect x="560" y="324" width="145" height="32" rx="5" fill="#1c4a2a" stroke="#44ff88" stroke-width="1"/>
+      <text x="632" y="338" text-anchor="middle" fill="#44ff88" font-size="10" font-weight="bold">Driver DIR-</text>
+      <text x="632" y="350" text-anchor="middle" fill="#44ff88" font-size="9">wire from c10</text>
+
+      <!-- GND rail -> Pi Pin 6 -->
+      <circle cx="190" cy="354" r="5" fill="#ffd93d" stroke="#cc9900" stroke-width="1.5"/>
+      <line x1="195" y1="354" x2="556" y2="374" stroke="#ffd93d" stroke-width="2" stroke-dasharray="5,3"/>
+      <rect x="560" y="362" width="155" height="32" rx="5" fill="#3a3a1c" stroke="#ffd93d" stroke-width="1"/>
+      <text x="637" y="376" text-anchor="middle" fill="#ffd93d" font-size="10" font-weight="bold">Pi Pin 6 (GND)</text>
+      <text x="637" y="388" text-anchor="middle" fill="#ffd93d" font-size="9">bottom blue (-) rail</text>
+
+      <!-- ROW CONNECTION CALLOUT -->
+      <rect x="243" y="210" width="4" height="96" rx="1" fill="#ffd93d" opacity="0.3"/>
+      <text x="560" y="152" fill="#ffd93d" font-size="9">All 5 holes in each row</text>
+      <text x="560" y="164" fill="#ffd93d" font-size="9">(vertical column) are</text>
+      <text x="560" y="176" fill="#ffd93d" font-size="9">connected inside the board</text>
+      <line x1="255" y1="258" x2="554" y2="164" stroke="#ffd93d" stroke-width="0.8" stroke-dasharray="3" opacity="0.4"/>
+
+      <!-- LEGEND -->
+      <rect x="30" y="410" width="800" height="70" rx="8" fill="#111" stroke="#444" stroke-width="1"/>
+      <text x="50" y="430" fill="#ccc" font-size="11" font-weight="bold">LEGEND:</text>
+      <circle cx="50" cy="450" r="6" fill="#ff4444" stroke="#cc2222" stroke-width="1.5"/>
+      <text x="62" y="454" fill="#ff6b6b" font-size="10">E = Emitter to GND</text>
+      <circle cx="185" cy="450" r="6" fill="#ffd93d" stroke="#ccaa00" stroke-width="1.5"/>
+      <text x="197" y="454" fill="#ffd93d" font-size="10">B = Base (signal in)</text>
+      <circle cx="325" cy="450" r="6" fill="#00d4ff" stroke="#0099cc" stroke-width="1.5"/>
+      <text x="337" y="454" fill="#00d4ff" font-size="10">C = Collector to Driver</text>
+      <rect x="470" y="444" width="12" height="12" rx="3" fill="#e8c87a" stroke="#aa8833" stroke-width="1"/>
+      <text x="488" y="454" fill="#e8c87a" font-size="10">1K Resistor</text>
+      <line x1="580" y1="450" x2="608" y2="450" stroke="#888" stroke-width="2" stroke-dasharray="5,3"/>
+      <text x="614" y="454" fill="#999" font-size="10">= wire to Pi/driver</text>
+      <text x="50" y="472" fill="#666" font-size="9">Rows go left to right (1,2,3...). Columns go top to bottom in lower half (e,d,c,b,a). Each row's 5 holes are connected inside.</text>
+
+      <!-- POWER RAIL INFO -->
+      <rect x="30" y="488" width="800" height="44" rx="8" fill="#1c3a4a" stroke="#3355cc" stroke-width="1"/>
+      <text x="50" y="506" fill="#aabbff" font-size="11" font-weight="bold">POWER RAILS: Blue (-) on outer edges, Red (+) on inner edges</text>
+      <text x="50" y="522" fill="#ffd93d" font-size="10" font-weight="bold">Top rails: not used  |  Bottom red (+): not used  |  Bottom blue (-): GND WIRE GOES HERE</text>
+
+      <!-- 5V WIRES NOTE -->
+      <rect x="30" y="540" width="800" height="26" rx="8" fill="#4a1c1c" stroke="#ff4444" stroke-width="1"/>
+      <text x="50" y="558" fill="#ff6b6b" font-size="10" font-weight="bold">ALSO: </text>
+      <text x="100" y="558" fill="#ff6b6b" font-size="10">Pi Pin 2 (5V) to Driver PUL+    |    Pi Pin 4 (5V) to Driver DIR+    |    Direct wires, no breadboard needed</text>
+
+      <!-- SCALE NOTE -->
+      <text x="290" y="586" text-anchor="middle" fill="#555" font-size="9" font-style="italic">Diagram shows rows 1-12 only. Your breadboard has 30 rows — use the left section.</text>
+    </svg>
+  </div>
+</div>
+
+
+<!-- ==================== STEP A ==================== -->
+<div class="step-card">
+  <span class="step-number">A</span>
+  <span class="step-title">Connect Pi Ground to Breadboard</span>
+  <div class="step-content">
+    <div class="step-text">
+      <p>Take a <strong>female-to-male DuPont wire</strong>.</p>
+      <ul style="margin: 8px 0 0 20px;">
+        <li>Plug the <strong>female (socket) end</strong> onto <span class="pin-highlight">Pi Pin 6 (GND)</span></li>
+        <li>Plug the <strong>male (pin) end</strong> into the <strong>blue GND rail (−)</strong> on the breadboard — any hole in the bottom rail</li>
+      </ul>
+      <p style="margin-top:12px; color:#999;">This is the shared ground for both transistors.</p>
+    </div>
+    <div class="step-diagram">
+      <svg width="420" height="200" viewBox="0 0 420 200">
+        <rect x="0" y="0" width="420" height="200" rx="8" fill="#16213e"/>
+        <!-- Pi -->
+        <rect x="20" y="20" width="120" height="60" rx="8" fill="#0d6b3d" stroke="#0a5530" stroke-width="2"/>
+        <text x="80" y="42" text-anchor="middle" fill="#0a5530" font-size="10">RASPBERRY PI</text>
+        <!-- Pin 6 highlighted -->
+        <circle cx="80" cy="65" r="10" fill="#333" stroke="#ffd93d" stroke-width="3"/>
+        <text x="80" y="69" text-anchor="middle" fill="#ffd93d" font-size="10" font-weight="bold">6</text>
+        <text x="80" y="100" text-anchor="middle" fill="#ffd93d" font-size="12" font-weight="bold">GND</text>
+        <!-- Wire -->
+        <path d="M 80 75 L 80 120 L 310 120 L 310 143" stroke="#ffd93d" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <text x="195" y="115" text-anchor="middle" fill="#ffd93d" font-size="11" font-weight="bold">DuPont wire</text>
+        <!-- Breadboard GND rail -->
+        <rect x="180" y="140" width="220" height="40" rx="5" fill="#e8dcc8" stroke="#bba" stroke-width="2"/>
+        <rect x="185" y="155" width="210" height="16" rx="3" fill="#2244aa" opacity="0.5"/>
+        <text x="290" y="168" text-anchor="middle" fill="#aabbff" font-size="11" font-weight="bold">— GND RAIL (−) —</text>
+        <!-- Connection dot -->
+        <circle cx="310" cy="155" r="6" fill="#ffd93d" stroke="#cc9900" stroke-width="2"/>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP B ==================== -->
+<div class="step-card">
+  <span class="step-number">B</span>
+  <span class="step-title">Place Transistor 1 (PUL) in Row 5</span>
+  <div class="step-content">
+    <div class="step-text">
+      <p>Take the first <strong>2N2222 transistor</strong>.</p>
+      <p style="margin-top:8px;">Hold it with the <strong>flat side facing you</strong>. Push the 3 legs into <strong>Row 5</strong>:</p>
+      <ul style="margin: 8px 0 0 20px;">
+        <li><strong style="color:#ff4444">Col A (left hole)</strong> = Emitter</li>
+        <li><strong style="color:#ffd93d">Col B (next hole)</strong> = Base</li>
+        <li><strong style="color:#00d4ff">Col C (next hole)</strong> = Collector</li>
+      </ul>
+      <p style="margin-top:8px; color:#999;">Leave Col D and E empty for now.</p>
+    </div>
+    <div class="step-diagram">
+      <svg width="420" height="220" viewBox="0 0 420 220">
+        <rect x="0" y="0" width="420" height="220" rx="8" fill="#16213e"/>
+        <!-- Breadboard section -->
+        <rect x="30" y="40" width="360" height="130" rx="5" fill="#e8dcc8" stroke="#bba" stroke-width="2"/>
+        <!-- Column labels -->
+        <text x="80" y="35" text-anchor="middle" fill="#999" font-size="14" font-weight="bold">A</text>
+        <text x="150" y="35" text-anchor="middle" fill="#999" font-size="14" font-weight="bold">B</text>
+        <text x="220" y="35" text-anchor="middle" fill="#999" font-size="14" font-weight="bold">C</text>
+        <text x="290" y="35" text-anchor="middle" fill="#999" font-size="14" font-weight="bold">D</text>
+        <text x="350" y="35" text-anchor="middle" fill="#999" font-size="14" font-weight="bold">E</text>
+        <!-- Row 4 (empty) -->
+        <text x="52" y="72" text-anchor="end" fill="#888" font-size="12">4</text>
+        <circle cx="80" cy="68" r="6" fill="#ccc" stroke="#aaa"/><circle cx="150" cy="68" r="6" fill="#ccc" stroke="#aaa"/><circle cx="220" cy="68" r="6" fill="#ccc" stroke="#aaa"/><circle cx="290" cy="68" r="6" fill="#ccc" stroke="#aaa"/><circle cx="350" cy="68" r="6" fill="#ccc" stroke="#aaa"/>
+        <!-- Row 5 — transistor here -->
+        <text x="52" y="112" text-anchor="end" fill="#ff6b6b" font-size="14" font-weight="bold">5</text>
+        <!-- Transistor body drawn above the holes -->
+        <rect x="62" y="96" width="178" height="28" rx="6" fill="#1a1a1a" stroke="#888" stroke-width="2"/>
+        <text x="150" y="114" text-anchor="middle" fill="#666" font-size="9">2N2222 — flat side → you</text>
+        <!-- E in A5 -->
+        <circle cx="80" cy="110" r="10" fill="#ff4444" stroke="#cc3333" stroke-width="2"/>
+        <text x="80" y="115" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">E</text>
+        <!-- B in B5 -->
+        <circle cx="150" cy="110" r="10" fill="#ffd93d" stroke="#ddbb22" stroke-width="2"/>
+        <text x="150" y="115" text-anchor="middle" fill="#333" font-size="12" font-weight="bold">B</text>
+        <!-- C in C5 -->
+        <circle cx="220" cy="110" r="10" fill="#00d4ff" stroke="#00aadd" stroke-width="2"/>
+        <text x="220" y="115" text-anchor="middle" fill="#333" font-size="12" font-weight="bold">C</text>
+        <!-- D5, E5 empty -->
+        <circle cx="290" cy="110" r="6" fill="#ccc" stroke="#aaa"/><circle cx="350" cy="110" r="6" fill="#ccc" stroke="#aaa"/>
+        <!-- Row 6 (empty) -->
+        <text x="52" y="150" text-anchor="end" fill="#888" font-size="12">6</text>
+        <circle cx="80" cy="146" r="6" fill="#ccc" stroke="#aaa"/><circle cx="150" cy="146" r="6" fill="#ccc" stroke="#aaa"/><circle cx="220" cy="146" r="6" fill="#ccc" stroke="#aaa"/><circle cx="290" cy="146" r="6" fill="#ccc" stroke="#aaa"/><circle cx="350" cy="146" r="6" fill="#ccc" stroke="#aaa"/>
+        <!-- Annotation -->
+        <text x="210" y="200" text-anchor="middle" fill="#ffd93d" font-size="12">↑ flat side of transistor faces you</text>
+        <text x="210" y="215" text-anchor="middle" fill="#888" font-size="11">Row 5: holes A–E are all connected internally</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP C ==================== -->
+<div class="step-card">
+  <span class="step-number">C</span>
+  <span class="step-title">Wire T1 Emitter to Ground Rail</span>
+  <div class="step-content">
+    <div class="step-text">
+      <p>Take a short <strong>male-to-male jumper wire</strong>.</p>
+      <ul style="margin: 8px 0 0 20px;">
+        <li>One end in any empty hole on <strong>Row 5</strong> (like Col E — it's connected to the Emitter internally)</li>
+        <li>Other end in the <strong>GND rail (−)</strong> directly below</li>
+      </ul>
+      <p style="margin-top:8px; color:#999;">This grounds the Emitter of Transistor 1.</p>
+    </div>
+    <div class="step-diagram">
+      <svg width="420" height="230" viewBox="0 0 420 230">
+        <rect x="0" y="0" width="420" height="230" rx="8" fill="#16213e"/>
+        <rect x="30" y="20" width="360" height="150" rx="5" fill="#e8dcc8" stroke="#bba" stroke-width="2"/>
+        <!-- Column labels -->
+        <text x="80" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">A</text>
+        <text x="150" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">B</text>
+        <text x="220" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">C</text>
+        <text x="290" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">D</text>
+        <text x="350" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">E</text>
+        <!-- Row 5 with transistor -->
+        <text x="52" y="60" text-anchor="end" fill="#ff6b6b" font-size="14" font-weight="bold">5</text>
+        <circle cx="80" cy="56" r="9" fill="#ff4444" stroke="#cc3333" stroke-width="2"/>
+        <text x="80" y="60" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">E</text>
+        <circle cx="150" cy="56" r="8" fill="#ffd93d"/>
+        <text x="150" y="60" text-anchor="middle" fill="#333" font-size="9">B</text>
+        <circle cx="220" cy="56" r="8" fill="#00d4ff"/>
+        <text x="220" y="60" text-anchor="middle" fill="#333" font-size="9">C</text>
+        <circle cx="290" cy="56" r="6" fill="#ccc" stroke="#aaa"/>
+        <circle cx="350" cy="56" r="6" fill="#ccc" stroke="#aaa"/>
+
+        <!-- Internal connection highlight -->
+        <rect x="72" y="70" width="286" height="3" rx="1" fill="#ffd93d" opacity="0.3"/>
+        <text x="210" y="86" text-anchor="middle" fill="#999" font-size="10">all connected in Row 5</text>
+
+        <!-- GND rail -->
+        <rect x="35" y="130" width="350" height="24" rx="4" fill="#2244aa" opacity="0.5"/>
+        <text x="210" y="147" text-anchor="middle" fill="#aabbff" font-size="11" font-weight="bold">— GND RAIL (−) —</text>
+
+        <!-- Jumper wire from A5 area down to GND -->
+        <line x1="80" y1="66" x2="80" y2="130" stroke="#ffd93d" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="80" cy="66" r="5" fill="#ffd93d"/>
+        <circle cx="80" cy="133" r="5" fill="#ffd93d"/>
+
+        <!-- Label -->
+        <text x="120" y="105" fill="#ffd93d" font-size="12" font-weight="bold">← jumper wire</text>
+        <text x="210" y="195" text-anchor="middle" fill="#888" font-size="12">Emitter (Row 5) → Ground Rail</text>
+        <text x="210" y="215" text-anchor="middle" fill="#666" font-size="11">The jumper connects the emitter path to ground</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP D ==================== -->
+<div class="step-card">
+  <span class="step-number">D</span>
+  <span class="step-title">Place Resistor 1 (Row 3 ↔ Row 5)</span>
+  <div class="step-content">
+    <div class="step-text">
+      <p>Take a <strong>1K resistor</strong> (Brown-Black-Red-Gold).</p>
+      <p style="margin-top:8px;">Bend the legs and insert:</p>
+      <ul style="margin: 8px 0 0 20px;">
+        <li>One leg into <strong>Row 3, Col D</strong></li>
+        <li>Other leg into <strong>Row 5, Col D</strong></li>
+      </ul>
+      <p style="margin-top:12px; color:#999;">The resistor bridges Row 3 to Row 5. Since all holes in Row 5 (A–E) connect internally, this connects through to the Base (Col B). The resistor limits current to protect the transistor.</p>
+    </div>
+    <div class="step-diagram">
+      <svg width="420" height="240" viewBox="0 0 420 240">
+        <rect x="0" y="0" width="420" height="240" rx="8" fill="#16213e"/>
+        <rect x="30" y="20" width="360" height="180" rx="5" fill="#e8dcc8" stroke="#bba" stroke-width="2"/>
+        <!-- Column labels -->
+        <text x="80" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">A</text>
+        <text x="150" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">B</text>
+        <text x="220" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">C</text>
+        <text x="290" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">D</text>
+        <text x="350" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">E</text>
+
+        <!-- Row 3 -->
+        <text x="52" y="55" text-anchor="end" fill="#888" font-size="13">3</text>
+        <circle cx="80" cy="51" r="6" fill="#ccc" stroke="#aaa"/><circle cx="150" cy="51" r="6" fill="#ccc" stroke="#aaa"/><circle cx="220" cy="51" r="6" fill="#ccc" stroke="#aaa"/>
+        <circle cx="290" cy="51" r="9" fill="#e8c87a" stroke="#aa8833" stroke-width="3"/>
+        <text x="290" y="56" text-anchor="middle" fill="#333" font-size="10" font-weight="bold">●</text>
+        <circle cx="350" cy="51" r="6" fill="#ccc" stroke="#aaa"/>
+
+        <!-- Row 4 (empty) -->
+        <text x="52" y="90" text-anchor="end" fill="#888" font-size="13">4</text>
+        <circle cx="80" cy="86" r="5" fill="#bbb"/><circle cx="150" cy="86" r="5" fill="#bbb"/><circle cx="220" cy="86" r="5" fill="#bbb"/><circle cx="290" cy="86" r="5" fill="#bbb"/><circle cx="350" cy="86" r="5" fill="#bbb"/>
+
+        <!-- Row 5 with transistor -->
+        <text x="52" y="130" text-anchor="end" fill="#ff6b6b" font-size="14" font-weight="bold">5</text>
+        <circle cx="80" cy="126" r="8" fill="#ff4444"/>
+        <text x="80" y="130" text-anchor="middle" fill="#fff" font-size="9">E</text>
+        <circle cx="150" cy="126" r="8" fill="#ffd93d"/>
+        <text x="150" y="130" text-anchor="middle" fill="#333" font-size="9">B</text>
+        <circle cx="220" cy="126" r="8" fill="#00d4ff"/>
+        <text x="220" y="130" text-anchor="middle" fill="#333" font-size="9">C</text>
+        <circle cx="290" cy="126" r="9" fill="#e8c87a" stroke="#aa8833" stroke-width="3"/>
+        <text x="290" y="131" text-anchor="middle" fill="#333" font-size="10" font-weight="bold">●</text>
+        <circle cx="350" cy="126" r="6" fill="#ccc" stroke="#aaa"/>
+
+        <!-- Resistor body between D3 and D5 -->
+        <line x1="290" y1="60" x2="290" y2="68" stroke="#ccc" stroke-width="2"/>
+        <rect x="278" y="68" width="24" height="44" rx="4" fill="#e8c87a" stroke="#aa8833" stroke-width="2"/>
+        <!-- Color bands -->
+        <rect x="281" y="73" width="6" height="5" fill="#8B4513"/>
+        <rect x="281" y="82" width="6" height="5" fill="#222"/>
+        <rect x="281" y="91" width="6" height="5" fill="#cc0000"/>
+        <rect x="281" y="100" width="5" height="4" fill="#DAA520"/>
+        <line x1="290" y1="112" x2="290" y2="118" stroke="#ccc" stroke-width="2"/>
+
+        <!-- Label -->
+        <text x="330" y="90" fill="#e8c87a" font-size="13" font-weight="bold">← R1</text>
+        <text x="330" y="105" fill="#e8c87a" font-size="11">1K Ohm</text>
+
+        <!-- Dashed line showing internal Row 5 connection from D to B -->
+        <line x1="150" y1="137" x2="290" y2="137" stroke="#ffd93d" stroke-width="1.5" stroke-dasharray="4"/>
+        <text x="220" y="160" text-anchor="middle" fill="#888" font-size="10">Row 5 connected internally (A–E)</text>
+        <text x="220" y="175" text-anchor="middle" fill="#888" font-size="10">so R1 at D connects through to Base at B</text>
+
+        <!-- Row label for D column -->
+        <text x="220" y="225" text-anchor="middle" fill="#e8c87a" font-size="12">Resistor: one leg in D3, other in D5</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP E ==================== -->
+<div class="step-card">
+  <span class="step-number">E</span>
+  <span class="step-title">Connect Pi GPIO 17 (Pin 11) → Row 3, Col E</span>
+  <div class="step-content">
+    <div class="step-text">
+      <p>Take a <strong>female-to-male DuPont wire</strong>.</p>
+      <ul style="margin: 8px 0 0 20px;">
+        <li><strong>Female end</strong> onto <span class="pin-highlight">Pi Pin 11 (GPIO 17)</span></li>
+        <li><strong>Male end</strong> into <strong>Row 3, Col E</strong> on the breadboard</li>
+      </ul>
+      <p style="margin-top:12px; color:#999;">Signal path: Pi GPIO17 → Row 3 E → (through Row 3 to D) → through R1 → Row 5 → transistor Base.</p>
+    </div>
+    <div class="step-diagram">
+      <svg width="440" height="200" viewBox="0 0 440 200">
+        <rect x="0" y="0" width="440" height="200" rx="8" fill="#16213e"/>
+        <!-- Pi pin -->
+        <rect x="10" y="20" width="110" height="60" rx="8" fill="#0d6b3d" stroke="#0a5530" stroke-width="2"/>
+        <text x="65" y="38" text-anchor="middle" fill="#0a5530" font-size="10">RASPBERRY PI</text>
+        <circle cx="85" cy="50" r="10" fill="#00d4ff" stroke="#44eeff" stroke-width="2"/>
+        <text x="85" y="54" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">11</text>
+        <text x="65" y="100" text-anchor="middle" fill="#00d4ff" font-size="12" font-weight="bold">GPIO 17</text>
+
+        <!-- Wire -->
+        <path d="M 96 50 L 280 50" stroke="#00d4ff" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <text x="190" y="44" text-anchor="middle" fill="#00d4ff" font-size="11" font-weight="bold">DuPont wire</text>
+
+        <!-- Breadboard with rows 3 and 5 -->
+        <rect x="250" y="20" width="180" height="150" rx="5" fill="#e8dcc8" stroke="#bba" stroke-width="2"/>
+        <!-- Column labels -->
+        <text x="290" y="15" text-anchor="middle" fill="#999" font-size="11" font-weight="bold">A</text>
+        <text x="320" y="15" text-anchor="middle" fill="#999" font-size="11" font-weight="bold">B</text>
+        <text x="350" y="15" text-anchor="middle" fill="#999" font-size="11" font-weight="bold">C</text>
+        <text x="380" y="15" text-anchor="middle" fill="#999" font-size="11" font-weight="bold">D</text>
+        <text x="410" y="15" text-anchor="middle" fill="#999" font-size="11" font-weight="bold">E</text>
+
+        <!-- Row 3 -->
+        <text x="268" y="55" text-anchor="end" fill="#888" font-size="12">3</text>
+        <circle cx="290" cy="50" r="5" fill="#ccc" stroke="#aaa"/>
+        <circle cx="320" cy="50" r="5" fill="#ccc" stroke="#aaa"/>
+        <circle cx="350" cy="50" r="5" fill="#ccc" stroke="#aaa"/>
+        <circle cx="380" cy="50" r="7" fill="#e8c87a" stroke="#aa8833" stroke-width="2"/>
+        <circle cx="410" cy="50" r="9" fill="#00d4ff" stroke="#00aadd" stroke-width="2"/>
+
+        <!-- R1 between D3 and D5 -->
+        <rect x="374" y="58" width="12" height="42" rx="2" fill="#e8c87a" stroke="#aa8833" stroke-width="1.5"/>
+
+        <!-- Row 5 -->
+        <text x="268" y="115" text-anchor="end" fill="#ff6b6b" font-size="12" font-weight="bold">5</text>
+        <circle cx="290" cy="110" r="7" fill="#ff4444"/><text x="290" y="114" text-anchor="middle" fill="#fff" font-size="8">E</text>
+        <circle cx="320" cy="110" r="7" fill="#ffd93d"/><text x="320" y="114" text-anchor="middle" fill="#333" font-size="8">B</text>
+        <circle cx="350" cy="110" r="7" fill="#00d4ff"/><text x="350" y="114" text-anchor="middle" fill="#333" font-size="8">C</text>
+        <circle cx="380" cy="110" r="7" fill="#e8c87a"/>
+        <circle cx="410" cy="110" r="5" fill="#ccc" stroke="#aaa"/>
+
+        <!-- Signal flow arrows -->
+        <path d="M 410 58 L 380 58" stroke="#00d4ff" stroke-width="1.5" fill="none" stroke-dasharray="3" marker-end="url(#aB)"/>
+        <path d="M 380 100 L 320 108" stroke="#ffd93d" stroke-width="1.5" fill="none" stroke-dasharray="3" marker-end="url(#aY)"/>
+        <text x="340" y="150" text-anchor="middle" fill="#888" font-size="10">Signal: E3 → D3 → R1 → D5 → B5 (Base)</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP F ==================== -->
+<div class="step-card">
+  <span class="step-number">F</span>
+  <span class="step-title">Wire T1 Collector → Driver PUL−</span>
+  <div class="step-content">
+    <div class="step-text">
+      <p>Take a <strong>male-to-male jumper wire</strong> (or longer wire if needed).</p>
+      <ul style="margin: 8px 0 0 20px;">
+        <li>One end in any empty hole on <strong>Row 5</strong> (like Col E) — it's connected to Collector at Col C</li>
+        <li>Other end into the <strong>PUL− screw terminal</strong> on the 2HSS86 driver</li>
+      </ul>
+      <p style="margin-top:8px;">Tighten the screw terminal firmly.</p>
+    </div>
+    <div class="step-diagram">
+      <svg width="440" height="130" viewBox="0 0 440 130">
+        <rect x="0" y="0" width="440" height="130" rx="8" fill="#16213e"/>
+        <!-- Breadboard bit -->
+        <rect x="10" y="25" width="160" height="60" rx="5" fill="#e8dcc8" stroke="#bba" stroke-width="2"/>
+        <text x="28" y="60" text-anchor="end" fill="#ff6b6b" font-size="11" font-weight="bold">5</text>
+        <circle cx="50" cy="55" r="6" fill="#ff4444"/><text x="50" y="59" text-anchor="middle" fill="#fff" font-size="8">E</text>
+        <circle cx="80" cy="55" r="6" fill="#ffd93d"/>
+        <circle cx="110" cy="55" r="8" fill="#00d4ff" stroke="#00aadd" stroke-width="2"/>
+        <text x="110" y="59" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">C</text>
+        <circle cx="140" cy="55" r="5" fill="#ccc" stroke="#aaa"/>
+        <!-- Wire -->
+        <line x1="120" y1="55" x2="270" y2="55" stroke="#00d4ff" stroke-width="4" stroke-linecap="round" stroke-dasharray="10,5"/>
+        <text x="195" y="46" text-anchor="middle" fill="#00d4ff" font-size="11" font-weight="bold">wire to driver</text>
+        <!-- Driver terminal -->
+        <rect x="270" y="25" width="160" height="60" rx="5" fill="#2a2a4a" stroke="#00d4ff" stroke-width="2"/>
+        <text x="350" y="52" text-anchor="middle" fill="#fff" font-size="16" font-weight="bold">PUL−</text>
+        <text x="350" y="72" text-anchor="middle" fill="#888" font-size="11">2HSS86 driver</text>
+        <!-- Screw -->
+        <rect x="284" y="42" width="20" height="20" rx="3" fill="#555" stroke="#777"/>
+        <text x="294" y="56" text-anchor="middle" fill="#aaa" font-size="12">⊕</text>
+        <text x="220" y="115" text-anchor="middle" fill="#888" font-size="11">Tighten screw terminal firmly</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP G ==================== -->
+<div class="step-card">
+  <span class="step-number">G</span>
+  <span class="step-title">Place Transistor 2 (DIR) in Row 10</span>
+  <div class="step-content">
+    <div class="step-text">
+      <p>Take the second <strong>2N2222 transistor</strong>. Same orientation — <strong>flat side facing you</strong>.</p>
+      <ul style="margin: 8px 0 0 20px;">
+        <li><strong>Row 10, Col A</strong> = Emitter</li>
+        <li><strong>Row 10, Col B</strong> = Base</li>
+        <li><strong>Row 10, Col C</strong> = Collector</li>
+      </ul>
+    </div>
+    <div class="step-diagram">
+      <svg width="420" height="180" viewBox="0 0 420 180">
+        <rect x="0" y="0" width="420" height="180" rx="8" fill="#16213e"/>
+        <rect x="30" y="20" width="360" height="110" rx="5" fill="#e8dcc8" stroke="#bba" stroke-width="2"/>
+        <text x="80" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">A</text>
+        <text x="150" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">B</text>
+        <text x="220" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">C</text>
+        <text x="290" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">D</text>
+        <text x="350" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">E</text>
+        <!-- Row 9 (empty) -->
+        <text x="52" y="52" text-anchor="end" fill="#888" font-size="12">9</text>
+        <circle cx="80" cy="48" r="5" fill="#ccc" stroke="#aaa"/><circle cx="150" cy="48" r="5" fill="#ccc" stroke="#aaa"/><circle cx="220" cy="48" r="5" fill="#ccc" stroke="#aaa"/><circle cx="290" cy="48" r="5" fill="#ccc" stroke="#aaa"/><circle cx="350" cy="48" r="5" fill="#ccc" stroke="#aaa"/>
+        <!-- Row 10 — transistor -->
+        <text x="52" y="92" text-anchor="end" fill="#44ff88" font-size="14" font-weight="bold">10</text>
+        <rect x="62" y="76" width="178" height="28" rx="6" fill="#1a1a1a" stroke="#888" stroke-width="2"/>
+        <text x="150" y="94" text-anchor="middle" fill="#666" font-size="9">2N2222 — flat side → you</text>
+        <circle cx="80" cy="90" r="10" fill="#ff4444" stroke="#cc3333" stroke-width="2"/>
+        <text x="80" y="95" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">E</text>
+        <circle cx="150" cy="90" r="10" fill="#ffd93d" stroke="#ddbb22" stroke-width="2"/>
+        <text x="150" y="95" text-anchor="middle" fill="#333" font-size="12" font-weight="bold">B</text>
+        <circle cx="220" cy="90" r="10" fill="#00d4ff" stroke="#00aadd" stroke-width="2"/>
+        <text x="220" y="95" text-anchor="middle" fill="#333" font-size="12" font-weight="bold">C</text>
+        <circle cx="290" cy="90" r="6" fill="#ccc" stroke="#aaa"/>
+        <circle cx="350" cy="90" r="6" fill="#ccc" stroke="#aaa"/>
+        <!-- Row 11 empty -->
+        <text x="52" y="122" text-anchor="end" fill="#888" font-size="12">11</text>
+        <circle cx="80" cy="118" r="5" fill="#ccc" stroke="#aaa"/><circle cx="150" cy="118" r="5" fill="#ccc" stroke="#aaa"/><circle cx="220" cy="118" r="5" fill="#ccc" stroke="#aaa"/><circle cx="290" cy="118" r="5" fill="#ccc" stroke="#aaa"/><circle cx="350" cy="118" r="5" fill="#ccc" stroke="#aaa"/>
+        <!-- Note -->
+        <text x="210" y="160" text-anchor="middle" fill="#44ff88" font-size="12">Same as Step B but in Row 10 (for DIRECTION signal)</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP H ==================== -->
+<div class="step-card">
+  <span class="step-number">H</span>
+  <span class="step-title">Wire T2 Emitter to Ground Rail</span>
+  <div class="step-content">
+    <div class="step-text">
+      <p>Short <strong>male-to-male jumper</strong>:</p>
+      <ul style="margin: 8px 0 0 20px;">
+        <li>One end in <strong>Row 10</strong> (any open hole) → <strong>GND rail (−)</strong></li>
+      </ul>
+      <p style="color:#999; margin-top:8px;">Same as Step C, but for Transistor 2.</p>
+    </div>
+    <div class="step-diagram">
+      <svg width="420" height="200" viewBox="0 0 420 200">
+        <rect x="0" y="0" width="420" height="200" rx="8" fill="#16213e"/>
+        <rect x="30" y="20" width="360" height="120" rx="5" fill="#e8dcc8" stroke="#bba" stroke-width="2"/>
+        <text x="52" y="65" text-anchor="end" fill="#44ff88" font-size="14" font-weight="bold">10</text>
+        <circle cx="80" cy="60" r="9" fill="#ff4444" stroke="#cc3333" stroke-width="2"/>
+        <text x="80" y="64" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">E</text>
+        <circle cx="150" cy="60" r="7" fill="#ffd93d"/>
+        <circle cx="220" cy="60" r="7" fill="#00d4ff"/>
+        <circle cx="290" cy="60" r="5" fill="#ccc" stroke="#aaa"/>
+        <circle cx="350" cy="60" r="5" fill="#ccc" stroke="#aaa"/>
+
+        <!-- GND rail -->
+        <rect x="35" y="110" width="350" height="22" rx="4" fill="#2244aa" opacity="0.5"/>
+        <text x="210" y="126" text-anchor="middle" fill="#aabbff" font-size="11" font-weight="bold">— GND RAIL (−) —</text>
+
+        <!-- Jumper wire -->
+        <line x1="80" y1="70" x2="80" y2="110" stroke="#ffd93d" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="80" cy="70" r="5" fill="#ffd93d"/>
+        <circle cx="80" cy="112" r="5" fill="#ffd93d"/>
+        <text x="130" y="95" fill="#ffd93d" font-size="12" font-weight="bold">← jumper</text>
+        <text x="210" y="170" text-anchor="middle" fill="#888" font-size="12">Emitter (Row 10) → Ground Rail</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP I ==================== -->
+<div class="step-card">
+  <span class="step-number">I</span>
+  <span class="step-title">Place Resistor 2 (Row 8 ↔ Row 10)</span>
+  <div class="step-content">
+    <div class="step-text">
+      <p>Second <strong>1K resistor</strong>:</p>
+      <ul style="margin: 8px 0 0 20px;">
+        <li>One leg → <strong>Row 8, Col D</strong></li>
+        <li>Other leg → <strong>Row 10, Col D</strong></li>
+      </ul>
+      <p style="color:#999; margin-top:8px;">Same as Step D but for the direction circuit. Bridges the signal from Row 8 down to the transistor base in Row 10.</p>
+    </div>
+    <div class="step-diagram">
+      <svg width="420" height="240" viewBox="0 0 420 240">
+        <rect x="0" y="0" width="420" height="240" rx="8" fill="#16213e"/>
+        <rect x="30" y="20" width="360" height="180" rx="5" fill="#e8dcc8" stroke="#bba" stroke-width="2"/>
+        <!-- Column labels -->
+        <text x="80" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">A</text>
+        <text x="150" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">B</text>
+        <text x="220" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">C</text>
+        <text x="290" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">D</text>
+        <text x="350" y="15" text-anchor="middle" fill="#999" font-size="13" font-weight="bold">E</text>
+
+        <!-- Row 8 -->
+        <text x="52" y="55" text-anchor="end" fill="#44ff88" font-size="14" font-weight="bold">8</text>
+        <circle cx="80" cy="51" r="6" fill="#ccc" stroke="#aaa"/><circle cx="150" cy="51" r="6" fill="#ccc" stroke="#aaa"/><circle cx="220" cy="51" r="6" fill="#ccc" stroke="#aaa"/>
+        <circle cx="290" cy="51" r="9" fill="#e8c87a" stroke="#aa8833" stroke-width="3"/>
+        <circle cx="350" cy="51" r="6" fill="#ccc" stroke="#aaa"/>
+
+        <!-- Row 9 -->
+        <text x="52" y="90" text-anchor="end" fill="#888" font-size="13">9</text>
+        <circle cx="80" cy="86" r="5" fill="#bbb"/><circle cx="150" cy="86" r="5" fill="#bbb"/><circle cx="220" cy="86" r="5" fill="#bbb"/><circle cx="290" cy="86" r="5" fill="#bbb"/><circle cx="350" cy="86" r="5" fill="#bbb"/>
+
+        <!-- Row 10 with transistor -->
+        <text x="52" y="130" text-anchor="end" fill="#44ff88" font-size="14" font-weight="bold">10</text>
+        <circle cx="80" cy="126" r="8" fill="#ff4444"/>
+        <text x="80" y="130" text-anchor="middle" fill="#fff" font-size="9">E</text>
+        <circle cx="150" cy="126" r="8" fill="#ffd93d"/>
+        <text x="150" y="130" text-anchor="middle" fill="#333" font-size="9">B</text>
+        <circle cx="220" cy="126" r="8" fill="#00d4ff"/>
+        <text x="220" y="130" text-anchor="middle" fill="#333" font-size="9">C</text>
+        <circle cx="290" cy="126" r="9" fill="#e8c87a" stroke="#aa8833" stroke-width="3"/>
+        <circle cx="350" cy="126" r="6" fill="#ccc" stroke="#aaa"/>
+
+        <!-- Resistor body between D8 and D10 -->
+        <line x1="290" y1="60" x2="290" y2="68" stroke="#ccc" stroke-width="2"/>
+        <rect x="278" y="68" width="24" height="44" rx="4" fill="#e8c87a" stroke="#aa8833" stroke-width="2"/>
+        <rect x="281" y="73" width="6" height="5" fill="#8B4513"/>
+        <rect x="281" y="82" width="6" height="5" fill="#222"/>
+        <rect x="281" y="91" width="6" height="5" fill="#cc0000"/>
+        <rect x="281" y="100" width="5" height="4" fill="#DAA520"/>
+        <line x1="290" y1="112" x2="290" y2="118" stroke="#ccc" stroke-width="2"/>
+
+        <!-- Label -->
+        <text x="330" y="90" fill="#e8c87a" font-size="13" font-weight="bold">← R2</text>
+        <text x="330" y="105" fill="#e8c87a" font-size="11">1K Ohm</text>
+
+        <!-- Dashed connection line -->
+        <line x1="150" y1="137" x2="290" y2="137" stroke="#ffd93d" stroke-width="1.5" stroke-dasharray="4"/>
+        <text x="220" y="160" text-anchor="middle" fill="#888" font-size="10">Row 10 connected internally: D → B (Base)</text>
+
+        <text x="220" y="225" text-anchor="middle" fill="#e8c87a" font-size="12">Resistor: one leg in D8, other in D10</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP J ==================== -->
+<div class="step-card">
+  <span class="step-number">J</span>
+  <span class="step-title">Connect Pi GPIO 27 (Pin 13) → Row 8, Col E</span>
+  <div class="step-content">
+    <div class="step-text">
+      <p><strong>Female-to-male DuPont wire:</strong></p>
+      <ul style="margin: 8px 0 0 20px;">
+        <li><strong>Female end</strong> onto <span class="pin-highlight">Pi Pin 13 (GPIO 27)</span></li>
+        <li><strong>Male end</strong> into <strong>Row 8, Col E</strong></li>
+      </ul>
+      <p style="color:#999; margin-top:8px;">Direction signal: Pi → Row 8 E → (through Row 8 to D) → R2 → Row 10 → transistor 2 Base.</p>
+    </div>
+    <div class="step-diagram">
+      <svg width="440" height="200" viewBox="0 0 440 200">
+        <rect x="0" y="0" width="440" height="200" rx="8" fill="#16213e"/>
+        <!-- Pi pin -->
+        <rect x="10" y="20" width="110" height="60" rx="8" fill="#0d6b3d" stroke="#0a5530" stroke-width="2"/>
+        <text x="65" y="38" text-anchor="middle" fill="#0a5530" font-size="10">RASPBERRY PI</text>
+        <circle cx="85" cy="50" r="10" fill="#44ff88" stroke="#66ffaa" stroke-width="2"/>
+        <text x="85" y="54" text-anchor="middle" fill="#333" font-size="10" font-weight="bold">13</text>
+        <text x="65" y="100" text-anchor="middle" fill="#44ff88" font-size="12" font-weight="bold">GPIO 27</text>
+        <!-- Wire -->
+        <path d="M 96 50 L 280 50" stroke="#44ff88" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <text x="190" y="44" text-anchor="middle" fill="#44ff88" font-size="11" font-weight="bold">DuPont wire</text>
+        <!-- Breadboard -->
+        <rect x="250" y="20" width="180" height="150" rx="5" fill="#e8dcc8" stroke="#bba" stroke-width="2"/>
+        <text x="290" y="15" text-anchor="middle" fill="#999" font-size="11" font-weight="bold">A</text>
+        <text x="320" y="15" text-anchor="middle" fill="#999" font-size="11" font-weight="bold">B</text>
+        <text x="350" y="15" text-anchor="middle" fill="#999" font-size="11" font-weight="bold">C</text>
+        <text x="380" y="15" text-anchor="middle" fill="#999" font-size="11" font-weight="bold">D</text>
+        <text x="410" y="15" text-anchor="middle" fill="#999" font-size="11" font-weight="bold">E</text>
+        <!-- Row 8 -->
+        <text x="268" y="55" text-anchor="end" fill="#44ff88" font-size="12" font-weight="bold">8</text>
+        <circle cx="290" cy="50" r="5" fill="#ccc" stroke="#aaa"/>
+        <circle cx="320" cy="50" r="5" fill="#ccc" stroke="#aaa"/>
+        <circle cx="350" cy="50" r="5" fill="#ccc" stroke="#aaa"/>
+        <circle cx="380" cy="50" r="7" fill="#e8c87a" stroke="#aa8833" stroke-width="2"/>
+        <circle cx="410" cy="50" r="9" fill="#44ff88" stroke="#33cc66" stroke-width="2"/>
+        <!-- R2 -->
+        <rect x="374" y="58" width="12" height="42" rx="2" fill="#e8c87a" stroke="#aa8833" stroke-width="1.5"/>
+        <!-- Row 10 -->
+        <text x="268" y="115" text-anchor="end" fill="#44ff88" font-size="12" font-weight="bold">10</text>
+        <circle cx="290" cy="110" r="7" fill="#ff4444"/><text x="290" y="114" text-anchor="middle" fill="#fff" font-size="8">E</text>
+        <circle cx="320" cy="110" r="7" fill="#ffd93d"/><text x="320" y="114" text-anchor="middle" fill="#333" font-size="8">B</text>
+        <circle cx="350" cy="110" r="7" fill="#00d4ff"/><text x="350" y="114" text-anchor="middle" fill="#333" font-size="8">C</text>
+        <circle cx="380" cy="110" r="7" fill="#e8c87a"/>
+        <circle cx="410" cy="110" r="5" fill="#ccc" stroke="#aaa"/>
+        <!-- Signal flow -->
+        <path d="M 410 58 L 380 58" stroke="#44ff88" stroke-width="1.5" fill="none" stroke-dasharray="3" marker-end="url(#aG)"/>
+        <path d="M 380 100 L 320 108" stroke="#ffd93d" stroke-width="1.5" fill="none" stroke-dasharray="3" marker-end="url(#aY)"/>
+        <text x="340" y="150" text-anchor="middle" fill="#888" font-size="10">Signal: E8 → D8 → R2 → D10 → B10 (Base)</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP K ==================== -->
+<div class="step-card">
+  <span class="step-number">K</span>
+  <span class="step-title">Wire T2 Collector → Driver DIR−</span>
+  <div class="step-content">
+    <div class="step-text">
+      <p><strong>Male-to-male jumper wire:</strong></p>
+      <ul style="margin: 8px 0 0 20px;">
+        <li>One end in <strong>Row 10</strong> (connected to Collector at Col C)</li>
+        <li>Other end → <strong>DIR− screw terminal</strong> on driver</li>
+      </ul>
+    </div>
+    <div class="step-diagram">
+      <svg width="440" height="130" viewBox="0 0 440 130">
+        <rect x="0" y="0" width="440" height="130" rx="8" fill="#16213e"/>
+        <rect x="10" y="25" width="160" height="60" rx="5" fill="#e8dcc8" stroke="#bba" stroke-width="2"/>
+        <text x="28" y="60" text-anchor="end" fill="#44ff88" font-size="11" font-weight="bold">10</text>
+        <circle cx="50" cy="55" r="6" fill="#ff4444"/><text x="50" y="59" text-anchor="middle" fill="#fff" font-size="8">E</text>
+        <circle cx="80" cy="55" r="6" fill="#ffd93d"/>
+        <circle cx="110" cy="55" r="8" fill="#00d4ff" stroke="#00aadd" stroke-width="2"/>
+        <text x="110" y="59" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">C</text>
+        <circle cx="140" cy="55" r="5" fill="#ccc" stroke="#aaa"/>
+        <!-- Wire -->
+        <line x1="120" y1="55" x2="270" y2="55" stroke="#44ff88" stroke-width="4" stroke-linecap="round" stroke-dasharray="10,5"/>
+        <text x="195" y="46" text-anchor="middle" fill="#44ff88" font-size="11" font-weight="bold">wire to driver</text>
+        <!-- Driver -->
+        <rect x="270" y="25" width="160" height="60" rx="5" fill="#2a2a4a" stroke="#44ff88" stroke-width="2"/>
+        <text x="350" y="52" text-anchor="middle" fill="#fff" font-size="16" font-weight="bold">DIR−</text>
+        <text x="350" y="72" text-anchor="middle" fill="#888" font-size="11">2HSS86 driver</text>
+        <rect x="284" y="42" width="20" height="20" rx="3" fill="#555" stroke="#777"/>
+        <text x="294" y="56" text-anchor="middle" fill="#aaa" font-size="12">⊕</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP L ==================== -->
+<div class="step-card">
+  <span class="step-number">L</span>
+  <span class="step-title">Connect 5V Power: Pi → Driver PUL+ and DIR+</span>
+  <div class="step-content">
+    <div class="step-text">
+      <p>Two <strong>female-to-male DuPont wires</strong> go <strong>directly from Pi to driver</strong> (no breadboard needed):</p>
+      <ul style="margin: 8px 0 0 20px;">
+        <li><span class="pin-highlight">Pi Pin 2 (5V)</span> → <strong>PUL+ terminal</strong> on driver</li>
+        <li><span class="pin-highlight">Pi Pin 4 (5V)</span> → <strong>DIR+ terminal</strong> on driver</li>
+      </ul>
+      <p style="margin-top:8px; color:#999;">These provide the 5V that powers the optocouplers inside the driver. The transistors on the breadboard switch the ground side (PUL−/DIR−).</p>
+    </div>
+    <div class="step-diagram">
+      <svg width="460" height="200" viewBox="0 0 460 200">
+        <rect x="0" y="0" width="460" height="200" rx="8" fill="#16213e"/>
+        <!-- Pi -->
+        <rect x="10" y="30" width="140" height="90" rx="8" fill="#0d6b3d" stroke="#0a5530" stroke-width="2"/>
+        <text x="80" y="50" text-anchor="middle" fill="#0a5530" font-size="10">RASPBERRY PI</text>
+        <!-- Pin 2 -->
+        <circle cx="50" cy="72" r="10" fill="#ff4444" stroke="#ff6666" stroke-width="2"/>
+        <text x="50" y="76" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">2</text>
+        <text x="50" y="100" text-anchor="middle" fill="#ff6b6b" font-size="10">5V</text>
+        <!-- Pin 4 -->
+        <circle cx="110" cy="72" r="10" fill="#ff4444" stroke="#ff6666" stroke-width="2"/>
+        <text x="110" y="76" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">4</text>
+        <text x="110" y="100" text-anchor="middle" fill="#ff6b6b" font-size="10">5V</text>
+        <!-- Driver -->
+        <rect x="290" y="20" width="160" height="170" rx="5" fill="#2a2a4a" stroke="#555" stroke-width="2"/>
+        <text x="370" y="42" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">2HSS86 Driver</text>
+        <!-- PUL+ -->
+        <rect x="305" y="58" width="110" height="40" rx="4" fill="#4a1c1c" stroke="#ff4444" stroke-width="2"/>
+        <text x="360" y="82" text-anchor="middle" fill="#ff6b6b" font-size="16" font-weight="bold">PUL+</text>
+        <!-- DIR+ -->
+        <rect x="305" y="112" width="110" height="40" rx="4" fill="#4a1c1c" stroke="#ff4444" stroke-width="2"/>
+        <text x="360" y="136" text-anchor="middle" fill="#ff6b6b" font-size="16" font-weight="bold">DIR+</text>
+        <!-- Wires -->
+        <path d="M 60 72 L 60 62 L 305 78" stroke="#ff4444" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <path d="M 120 72 L 120 120 L 305 132" stroke="#ff4444" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <text x="190" y="55" fill="#ff6b6b" font-size="11" font-weight="bold">DuPont wires</text>
+        <text x="190" y="70" fill="#ff6b6b" font-size="10">(direct — no breadboard)</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== DONE ==================== -->
+<h2>You're Done Wiring!</h2>
+
+<div class="success">
+  <strong>✓ Final check — count all 13 connections:</strong>
+</div>
+
+<ul class="checklist">
+  <li>Pi Pin 6 (GND) → Breadboard GND rail</li>
+  <li>Transistor 1 in Row 5 (flat side toward you)</li>
+  <li>Row 5 Col A (T1 emitter) → GND rail</li>
+  <li>1K Resistor 1: Row 3 Col D ↔ Row 5 Col D</li>
+  <li>Pi Pin 11 (GPIO 17) → Row 3 Col E</li>
+  <li>Row 5 Col C (T1 collector) → Driver PUL−</li>
+  <li>Transistor 2 in Row 10 (flat side toward you)</li>
+  <li>Row 10 Col A (T2 emitter) → GND rail</li>
+  <li>1K Resistor 2: Row 8 Col D ↔ Row 10 Col D</li>
+  <li>Pi Pin 13 (GPIO 27) → Row 8 Col E</li>
+  <li>Row 10 Col C (T2 collector) → Driver DIR−</li>
+  <li>Pi Pin 2 (5V) → Driver PUL+</li>
+  <li>Pi Pin 4 (5V) → Driver DIR+</li>
+</ul>
+
+<h2>Test Command</h2>
+<div class="success">
+  <strong>Tell me when you're done and I'll run this on the Pi:</strong>
+  <pre style="margin-top:8px; background:#111; padding:12px; border-radius:6px; color:#44ff88; font-size:16px;">python3 ~/motor_control/motor_control.py test</pre>
+  <p style="margin-top:8px;">200 steps CW (slow) → 200 steps CCW (slow) → 1000 steps CW (fast)</p>
+</div>
+
+</body>
+</html>
